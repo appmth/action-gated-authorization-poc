@@ -1,0 +1,36 @@
+{
+  "name": "action-gated-authorization-poc",
+  "version": "1.0.0",
+  "description": "AI Agent の Action を実行直前で必ず評価・制御する 認可構造（Action-Gated Authorization）の最小PoCです。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build:slides": "marp docs/images/aga-slides.md -o docs/images/aga-slides.html",
+    "build:slides:pdf": "marp docs/images/aga-slides.md -o docs/images/aga-slides.pdf --allow-local-files",
+    "build:slides:pptx": "marp docs/images/aga-slides.md -o docs/images/aga-slides.pptx",
+    "watch:slides": "marp docs/images/aga-slides.md -o docs/images/aga-slides.html --watch",
+    "slidev": "slidev docs/slides/slides.md",
+    "slidev:build": "slidev build docs/slides/slides.md --out docs/slides/dist",
+    "slidev:export": "slidev export docs/slides/slides.md --output docs/slides/aga-slides.pdf",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/appmth/action-gated-authorization-poc.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/appmth/action-gated-authorization-poc/issues"
+  },
+  "homepage": "https://github.com/appmth/action-gated-authorization-poc#readme",
+  "devDependencies": {
+    "@marp-team/marp-cli": "^4.2.3",
+    "@slidev/cli": "^52.11.1",
+    "@slidev/theme-default": "^0.25.0"
+  }
+}
