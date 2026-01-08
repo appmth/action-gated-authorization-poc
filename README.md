@@ -1,5 +1,7 @@
 # Action-Gated Authorization (AGA) - PoC
 
+AI Agent の Action を実行直前で必ず評価・制御する認可構造の最小PoCです。
+
 ## TL;DR
 AI Agent の Action を実行直前で必ず評価・制御する
 認可構造（Action-Gated Authorization）の最小PoCです。
@@ -9,6 +11,26 @@ AI Agent の Action を実行直前で必ず評価・制御する
 - 実行前に必ず PEP で止まり
 - PDP が業務文脈を評価し
 - Allow / Deny と理由を返します
+
+## Folder Structure
+
+```
+action-gated-authorization-poc/
+├── agent/          # AI Agent implementation
+├── pep/            # Policy Enforcement Point
+├── pdp/            # Policy Decision Point
+├── policy/         # Policy definitions
+├── infra/          # Infrastructure setup
+├── logs/           # Execution logs
+├── demo/           # Demo scenarios and examples
+├── diagrams/       # Architecture diagrams
+├── docs/           # Documentation
+│   ├── 01-plan/
+│   ├── 02-slides/
+│   ├── 03-images/
+│   └── 99-gpt-memo/
+└── slides/         # Presentation materials
+```
 
 ## Demo (30 seconds)
 [demo.mp4]
