@@ -1,4 +1,6 @@
-package demo
+package authorization
+
+import rego.v1
 
 # 最終アウトプット（PEPが使う）
 default decision := {"allow": false, "reason": "default deny: no matching policy"}
@@ -8,6 +10,7 @@ allow if {
   input.action == "get_resident_info"
   input.context.purpose == "inquiry"
   input.context.time == "business_hours"
+  input.context.data_sensitivity == "required"
 }
 
 # Deny の理由（順番が大事：より具体的なものを上に）

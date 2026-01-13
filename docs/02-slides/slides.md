@@ -15,6 +15,97 @@ title: 認可の配置シフト
 
 ---
 
+# AI Agent時代の認可アーキテクチャ
+
+![AI Agent時代の認可アーキテクチャ - 業務フローから「認可」を分離すべき理由](../03-images/authorization-placement/AI_Agent_Authorization_Placement-01.png)
+*業務フローから「認可」を分離すべき理由*
+
+---
+
+# 従来の世界：人間中心の実行経路
+
+![従来の世界 - 固定・予測可能な実行経路](../03-images/authorization-placement/AI_Agent_Authorization_Placement-02.png)
+*人間による操作は固定・予測可能（Fixed・Predictable）*
+
+---
+
+# AI Agentの登場：実行経路の非決定性
+
+![AI Agentの登場 - 動的・非決定的な実行経路](../03-images/authorization-placement/AI_Agent_Authorization_Placement-03.png)
+*AI Agentによる実行経路は動的・非決定的（Dynamic・Non-deterministic）*
+
+---
+
+# 境界型認可の限界
+
+![境界型認可の限界 - 業務的な妥当性は保証できない](../03-images/authorization-placement/AI_Agent_Authorization_Placement-04.png)
+*例：「ゴミ収集日」の問い合わせに対し、不要な「世帯情報・納税情報」まで取得してしまうケース*
+
+---
+
+# 説明責任の構造的崩壊
+
+![説明責任の構造的崩壊 - Before/After比較](../03-images/authorization-placement/AI_Agent_Authorization_Placement-05.png)
+*地方自治体では『アクセスできたか』よりも『なぜその情報に触れる必要があったのかを説明できるか』が常に問われる*
+
+---
+
+# AIへの責任転嫁は通用しない
+
+![AIへの責任転嫁は通用しない](../03-images/authorization-placement/AI_Agent_Authorization_Placement-06.png)
+*求められるのは、事後説明ではなく、事前に防ぐ設計*
+
+---
+
+# 問題はモデルではなく「配置」にある
+
+![問題はモデルではなく配置にある](../03-images/authorization-placement/AI_Agent_Authorization_Placement-07.png)
+*RBAC/ABACの配置が適切でないとAccountability Gap、適切ならControl Restored*
+
+---
+
+# 基本構造：判断(PDP)と実行(PEP)の分離
+
+![PDP/PEP基本構造](../03-images/authorization-placement/AI_Agent_Authorization_Placement-08.png)
+*PDP: 判断（考える責務）、PEP: 強制（止める責務）*
+
+---
+
+# 提案：Action-Gated Authorization (AGA)
+
+![AGA提案 - Actionごとに認可ゲートを通過](../03-images/authorization-placement/AI_Agent_Authorization_Placement-09.png)
+*AI Agentの各Actionに対して、PEP → PDP → ツール実行の流れを強制*
+
+---
+
+# 思考と実行の分離：3つの配置パターン
+
+![思考と実行の分離 - 従来/よくあるAI配置/AGAによる配置](../03-images/authorization-placement/AI_Agent_Authorization_Placement-10.png)
+*よくあるAI配置では「AIが不要なPIIにアクセスしても止められない」問題が発生*
+
+---
+
+# 「賢いAI」以上に「破綻しない業務構造」が重要
+
+![賢いAI以上に破綻しない業務構造が重要](../03-images/authorization-placement/AI_Agent_Authorization_Placement-11.png)
+*AIの賢さよりも、構造としての堅牢性を優先すべき*
+
+---
+
+# Call to Action for Your Role
+
+![各役割へのCall to Action](../03-images/authorization-placement/AI_Agent_Authorization_Placement-12.png)
+*プロダクトエンジニア・セキュリティ担当・組織設計者それぞれの視点*
+
+---
+
+# 参考：PDP/PEPアーキテクチャ全体図
+
+![PDP/PEPアーキテクチャ全体図](../03-images/authorization-placement/PDPPEP_architecture.png)
+*認可サービスの標準的なアーキテクチャ（PAP, PIP, Attribute Repository含む）*
+
+---
+
 <div class="grid grid-cols-3 gap-4 px-4 mb-4">
 
 <!-- 従来の配置 -->

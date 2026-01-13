@@ -1,0 +1,1871 @@
+---
+insertId: ukfjuae2939e
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Factivity
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  authenticationInfo:
+    oauthInfo:
+      oauthClientId: 32555940559.apps.googleusercontent.com
+    principalEmail: tsta2math@gmail.com
+    principalSubject: user:tsta2math@gmail.com
+  authorizationInfo:
+  - granted: true
+    permission: run.services.update
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes: {}
+  methodName: google.cloud.run.v1.Services.ReplaceService
+  request:
+    '@type': type.googleapis.com/google.cloud.run.v1.ReplaceServiceRequest
+    dryRun: all
+    name: namespaces/aga-poc/services/service-b
+    service:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      metadata:
+        annotations:
+          run.googleapis.com/build-enable-automatic-updates: 'false'
+          run.googleapis.com/build-id: db81e6a8-9765-429e-84e7-b7a32d7c34e6
+          run.googleapis.com/build-image-uri: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+          run.googleapis.com/build-name: projects/374053446416/locations/asia-northeast1/builds/db81e6a8-9765-429e-84e7-b7a32d7c34e6
+          run.googleapis.com/build-source-location: gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768079363.307947-3fed70b5cff44d9fa8e69a6c6b03531b.zip#1768079363392015
+          run.googleapis.com/client-name: gcloud
+          run.googleapis.com/client-version: 551.0.0
+          run.googleapis.com/ingress: all
+          run.googleapis.com/ingress-status: all
+          run.googleapis.com/maxScale: '5'
+          run.googleapis.com/operation-id: e6d8d64d-5631-45c2-8659-15325d294374
+          run.googleapis.com/urls: '["https://service-b-374053446416.asia-northeast1.run.app"]'
+          serving.knative.dev/creator: tsta2math@gmail.com
+          serving.knative.dev/lastModifier: tsta2math@gmail.com
+        creationTimestamp: '2026-01-10T20:31:56.326515Z'
+        generation: 3
+        labels:
+          cloud.googleapis.com/location: asia-northeast1
+        name: service-b
+        namespace: '374053446416'
+        resourceVersion: AAZIDw/Ibgo
+        selfLink: /apis/serving.knative.dev/v1/namespaces/374053446416/services/service-b
+        uid: 3b9a6e59-5ea5-4ce0-9bdc-ab88438bd4db
+      spec:
+        template:
+          metadata:
+            annotations:
+              autoscaling.knative.dev/maxScale: '5'
+              run.googleapis.com/client-name: gcloud
+              run.googleapis.com/client-version: 551.0.0
+              run.googleapis.com/startup-cpu-boost: 'true'
+            labels:
+              client.knative.dev/nonce: yxatmnwazk
+              run.googleapis.com/startupProbeType: Default
+          spec:
+            containerConcurrency: 80
+            containers:
+            - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+              resources:
+                limits:
+                  cpu: 1000m
+                  memory: 512Mi
+            serviceAccountName: 374053446416-compute@developer.gserviceaccount.com
+            timeoutSeconds: 300
+        traffic:
+        - latestRevision: true
+          percent: 100
+      status:
+        conditions:
+        - lastTransitionTime: '2026-01-10T21:09:46.745700Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: Ready
+        - lastTransitionTime: '2026-01-10T21:09:46.683932Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: ConfigurationsReady
+        - lastTransitionTime: '2026-01-10T21:09:46.745700Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: RoutesReady
+        latestCreatedRevisionName: service-b-00003-gw8
+        observedGeneration: 3
+  requestMetadata:
+    callerIp: 2404:7a81:2161:cb00:b467:577:324a:b6bc
+    callerSuppliedUserAgent: google-cloud-sdk gcloud/551.0.0 command/gcloud.run.deploy
+      invocation-id/b94d1decb9f44b94a6dd4d41bc563e71 environment/None environment-version/None
+      client-os/MACOSX client-os-ver/23.6.0 client-pltf-arch/arm interactive/True
+      from-script/False python/3.13.11 term/xterm-256color  (Macintosh; Intel Mac
+      OS X 23.6.0),gzip(gfe)
+    destinationAttributes: {}
+    requestAttributes:
+      auth: {}
+      time: '2026-01-10T21:14:14.355220Z'
+  resourceLocation:
+    currentLocations:
+    - asia-northeast1
+  resourceName: namespaces/aga-poc/services/service-b
+  serviceName: run.googleapis.com
+  status:
+    code: 3
+    message: 'spec.template.spec.containers[0].env: The following reserved env names
+      were provided: PORT. These values are automatically set by the system.'
+receiveTimestamp: '2026-01-10T21:14:15.332456611Z'
+resource:
+  labels:
+    configuration_name: ''
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: ''
+    service_name: service-b
+  type: cloud_run_revision
+severity: ERROR
+timestamp: '2026-01-10T21:14:14.147193Z'
+---
+insertId: yg9v79e2maz4
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Fsystem_event
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  methodName: /Services.ReplaceService
+  resourceName: namespaces/aga-poc/services/service-b
+  response:
+    '@type': type.googleapis.com/google.cloud.run.v1.Service
+    apiVersion: serving.knative.dev/v1
+    kind: Service
+    metadata:
+      annotations:
+        run.googleapis.com/build-enable-automatic-updates: 'false'
+        run.googleapis.com/build-id: db81e6a8-9765-429e-84e7-b7a32d7c34e6
+        run.googleapis.com/build-image-uri: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+        run.googleapis.com/build-name: projects/374053446416/locations/asia-northeast1/builds/db81e6a8-9765-429e-84e7-b7a32d7c34e6
+        run.googleapis.com/build-source-location: gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768079363.307947-3fed70b5cff44d9fa8e69a6c6b03531b.zip#1768079363392015
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 551.0.0
+        run.googleapis.com/ingress: all
+        run.googleapis.com/ingress-status: all
+        run.googleapis.com/maxScale: '5'
+        run.googleapis.com/operation-id: e6d8d64d-5631-45c2-8659-15325d294374
+        run.googleapis.com/urls: '["https://service-b-374053446416.asia-northeast1.run.app"]'
+        serving.knative.dev/creator: tsta2math@gmail.com
+        serving.knative.dev/lastModifier: tsta2math@gmail.com
+      creationTimestamp: '2026-01-10T20:31:56.326515Z'
+      generation: 3
+      labels:
+        cloud.googleapis.com/location: asia-northeast1
+      name: service-b
+      namespace: '374053446416'
+      resourceVersion: AAZIDw/Hr38
+      selfLink: /apis/serving.knative.dev/v1/namespaces/374053446416/services/service-b
+      uid: 3b9a6e59-5ea5-4ce0-9bdc-ab88438bd4db
+    spec:
+      template:
+        metadata:
+          annotations:
+            autoscaling.knative.dev/maxScale: '5'
+            run.googleapis.com/client-name: gcloud
+            run.googleapis.com/client-version: 551.0.0
+            run.googleapis.com/startup-cpu-boost: 'true'
+          labels:
+            client.knative.dev/nonce: whfjudbpwv
+            run.googleapis.com/startupProbeType: Default
+        spec:
+          containerConcurrency: 80
+          containers:
+          - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:20df874dab6c4addfd50c3af6b39e96d5a484fdde65990ab3d728b4420540180
+            ports:
+            - containerPort: 8181
+              name: http1
+            resources:
+              limits:
+                cpu: 1000m
+                memory: 512Mi
+            startupProbe:
+              failureThreshold: 1
+              periodSeconds: 240
+              tcpSocket:
+                port: 8181
+              timeoutSeconds: 240
+          serviceAccountName: 374053446416-compute@developer.gserviceaccount.com
+          timeoutSeconds: 300
+      traffic:
+      - latestRevision: true
+        percent: 100
+    status:
+      conditions:
+      - lastTransitionTime: '2026-01-10T21:09:46.683932Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00003-gw8&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00003-gw8%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: Ready
+      - lastTransitionTime: '2026-01-10T21:09:46.683932Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00003-gw8&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00003-gw8%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: ConfigurationsReady
+      - lastTransitionTime: '2026-01-10T21:09:43.859174Z'
+        message: Provisioning revision instances to receive traffic.
+        status: Unknown
+        type: RoutesReady
+      latestCreatedRevisionName: service-b-00003-gw8
+      observedGeneration: 3
+  serviceName: run.googleapis.com
+  status:
+    code: 9
+    message: |-
+      Ready condition status changed to False for Service service-b with message: The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+      Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00003-gw8&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00003-gw8%22 
+      For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+receiveTimestamp: '2026-01-10T21:09:47.037447755Z'
+resource:
+  labels:
+    configuration_name: ''
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: ''
+    service_name: service-b
+  type: cloud_run_revision
+severity: ERROR
+timestamp: '2026-01-10T21:09:46.732333Z'
+---
+insertId: yg9v79e2maz2
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Fsystem_event
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  methodName: /Services.ReplaceService
+  resourceName: namespaces/aga-poc/revisions/service-b-00003-gw8
+  response:
+    '@type': type.googleapis.com/google.cloud.run.v1.Revision
+    apiVersion: serving.knative.dev/v1
+    kind: Revision
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '5'
+        run.googleapis.com/build-source-location: '{"service-b-1":"gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768079363.307947-3fed70b5cff44d9fa8e69a6c6b03531b.zip#1768079363392015"}'
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 551.0.0
+        run.googleapis.com/operation-id: e6d8d64d-5631-45c2-8659-15325d294374
+        run.googleapis.com/startup-cpu-boost: 'true'
+        serving.knative.dev/creator: tsta2math@gmail.com
+      creationTimestamp: '2026-01-10T21:09:42.016754Z'
+      generation: 1
+      labels:
+        client.knative.dev/nonce: whfjudbpwv
+        cloud.googleapis.com/location: asia-northeast1
+        run.googleapis.com/startupProbeType: Default
+        serving.knative.dev/configuration: service-b
+        serving.knative.dev/configurationGeneration: '3'
+        serving.knative.dev/route: service-b
+        serving.knative.dev/service: service-b
+        serving.knative.dev/serviceUid: 3b9a6e59-5ea5-4ce0-9bdc-ab88438bd4db
+      name: service-b-00003-gw8
+      namespace: '374053446416'
+      ownerReferences:
+      - apiVersion: serving.knative.dev/v1
+        blockOwnerDeletion: true
+        controller: true
+        kind: Configuration
+        name: service-b
+        uid: 98048577-a192-4b96-999f-e07a05f8df44
+      resourceVersion: AAZIDw/GkLA
+      selfLink: /apis/serving.knative.dev/v1/namespaces/374053446416/revisions/service-b-00003-gw8
+      uid: 9285610d-3cdf-484f-a63f-0d3abab0e8ea
+    spec:
+      containerConcurrency: 80
+      containers:
+      - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:20df874dab6c4addfd50c3af6b39e96d5a484fdde65990ab3d728b4420540180
+        name: service-b-1
+        ports:
+        - containerPort: 8181
+          name: http1
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        startupProbe:
+          failureThreshold: 1
+          periodSeconds: 240
+          tcpSocket:
+            port: 8181
+          timeoutSeconds: 240
+      serviceAccountName: 374053446416-compute@developer.gserviceaccount.com
+      timeoutSeconds: 300
+    status:
+      conditions:
+      - lastTransitionTime: '2026-01-10T21:09:46.644656Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00003-gw8&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00003-gw8%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: Ready
+      - lastTransitionTime: '2026-01-10T21:09:46.644656Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00003-gw8&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00003-gw8%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: ContainerHealthy
+      - lastTransitionTime: '2026-01-10T21:09:43.760650Z'
+        message: Container image import completed in 1.23s.
+        status: 'True'
+        type: ContainerReady
+      - lastTransitionTime: '2026-01-10T21:09:45.239502Z'
+        message: Provisioning imported containers completed in 1.48s. Checking container
+          health. This will wait for up to 4m for the configured startup probe, including
+          an initial delay of 0s.
+        status: 'True'
+        type: ResourcesAvailable
+      - lastTransitionTime: '2026-01-10T21:09:45.239502Z'
+        message: System will retry after 00:00 from lastTransitionTime for attempt
+          0.
+        reason: ImmediateRetry
+        severity: Info
+        status: 'True'
+        type: Retry
+      containerStatuses:
+      - imageDigest: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:20df874dab6c4addfd50c3af6b39e96d5a484fdde65990ab3d728b4420540180
+        name: service-b-1
+      imageDigest: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:20df874dab6c4addfd50c3af6b39e96d5a484fdde65990ab3d728b4420540180
+      logUrl: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00003-gw8&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00003-gw8%22
+      observedGeneration: 1
+  serviceName: run.googleapis.com
+  status:
+    code: 9
+    message: |-
+      Ready condition status changed to False for Revision service-b-00003-gw8 with message: The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+      Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00003-gw8&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00003-gw8%22 
+      For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+receiveTimestamp: '2026-01-10T21:09:47.037447755Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00003-gw8
+    service_name: service-b
+  type: cloud_run_revision
+severity: ERROR
+timestamp: '2026-01-10T21:09:46.657345Z'
+---
+insertId: 6962c01a0009d1713c6f163c
+labels:
+  instanceId: 005eb6974c366b2020c2984d4e50ef4af0ba16869ed5440c22e6b75dcd4fc6f93d38ca610b3d293225e031190dbbf83d35d8d79739550b5578da897d601807656973e910c90a0a8ee708de95e20255092870
+logName: projects/aga-poc/logs/run.googleapis.com%2Fvarlog%2Fsystem
+receiveTimestamp: '2026-01-10T21:09:46.700725457Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00003-gw8
+    service_name: service-b
+  type: cloud_run_revision
+severity: ERROR
+textPayload: |-
+  Default STARTUP TCP probe failed 1 time consecutively for container "service-b-1" on port 8181. The instance was not started.
+  Connection failed with status CANCELLED.
+timestamp: '2026-01-10T21:09:46.643441Z'
+---
+insertId: 6962c01a0008599b69f86aeb
+labels:
+  container_name: service-b-1
+  instanceId: 005eb6974c366b2020c2984d4e50ef4af0ba16869ed5440c22e6b75dcd4fc6f93d38ca610b3d293225e031190dbbf83d35d8d79739550b5578da897d601807656973e910c90a0a8ee708de95e20255092870
+logName: projects/aga-poc/logs/run.googleapis.com%2Fvarlog%2Fsystem
+receiveTimestamp: '2026-01-10T21:09:46.700725457Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00003-gw8
+    service_name: service-b
+  type: cloud_run_revision
+severity: WARNING
+textPayload: Container called exit(1).
+timestamp: '2026-01-10T21:09:46.547153646Z'
+---
+insertId: 6962c01a0000aecf5f33b611
+labels:
+  instanceId: 005eb6974c366b2020c2984d4e50ef4af0ba16869ed5440c22e6b75dcd4fc6f93d38ca610b3d293225e031190dbbf83d35d8d79739550b5578da897d601807656973e910c90a0a8ee708de95e20255092870
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:09:46.047979885Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00003-gw8
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: '/policy/authorization.rego:37: rego_parse_error: var cannot be used
+  for rule name'
+timestamp: '2026-01-10T21:09:46.044751Z'
+---
+insertId: 6962c01a0000aecbe18ac842
+labels:
+  instanceId: 005eb6974c366b2020c2984d4e50ef4af0ba16869ed5440c22e6b75dcd4fc6f93d38ca610b3d293225e031190dbbf83d35d8d79739550b5578da897d601807656973e910c90a0a8ee708de95e20255092870
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:09:46.047979885Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00003-gw8
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: '/policy/authorization.rego:30: rego_parse_error: var cannot be used
+  for rule name'
+timestamp: '2026-01-10T21:09:46.044747Z'
+---
+insertId: 6962c01a0000aec85ec18fe5
+labels:
+  instanceId: 005eb6974c366b2020c2984d4e50ef4af0ba16869ed5440c22e6b75dcd4fc6f93d38ca610b3d293225e031190dbbf83d35d8d79739550b5578da897d601807656973e910c90a0a8ee708de95e20255092870
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:09:46.047979885Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00003-gw8
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: '/policy/authorization.rego:24: rego_parse_error: var cannot be used
+  for rule name'
+timestamp: '2026-01-10T21:09:46.044744Z'
+---
+insertId: 6962c01a0000aec443112c4f
+labels:
+  instanceId: 005eb6974c366b2020c2984d4e50ef4af0ba16869ed5440c22e6b75dcd4fc6f93d38ca610b3d293225e031190dbbf83d35d8d79739550b5578da897d601807656973e910c90a0a8ee708de95e20255092870
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:09:46.047979885Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00003-gw8
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: '/policy/authorization.rego:19: rego_parse_error: var cannot be used
+  for rule name'
+timestamp: '2026-01-10T21:09:46.044740Z'
+---
+insertId: 6962c01a0000aec1a10ce8dc
+labels:
+  instanceId: 005eb6974c366b2020c2984d4e50ef4af0ba16869ed5440c22e6b75dcd4fc6f93d38ca610b3d293225e031190dbbf83d35d8d79739550b5578da897d601807656973e910c90a0a8ee708de95e20255092870
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:09:46.047979885Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00003-gw8
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: '/policy/authorization.rego:8: rego_parse_error: var cannot be used for
+  rule name'
+timestamp: '2026-01-10T21:09:46.044737Z'
+---
+insertId: 6962c01a0000aeacc4853cf2
+labels:
+  instanceId: 005eb6974c366b2020c2984d4e50ef4af0ba16869ed5440c22e6b75dcd4fc6f93d38ca610b3d293225e031190dbbf83d35d8d79739550b5578da897d601807656973e910c90a0a8ee708de95e20255092870
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:09:46.047979885Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00003-gw8
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: 'error: load error: 5 errors occurred during loading:'
+timestamp: '2026-01-10T21:09:46.044716Z'
+---
+insertId: 6962c0190005947d27b88eba
+labels:
+  instanceId: 005eb6974c366b2020c2984d4e50ef4af0ba16869ed5440c22e6b75dcd4fc6f93d38ca610b3d293225e031190dbbf83d35d8d79739550b5578da897d601807656973e910c90a0a8ee708de95e20255092870
+  scaling_reason: DEPLOYMENT_ROLLOUT
+logName: projects/aga-poc/logs/run.googleapis.com%2Fvarlog%2Fsystem
+receiveTimestamp: '2026-01-10T21:09:45.369754728Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00003-gw8
+    service_name: service-b
+  type: cloud_run_revision
+severity: INFO
+textPayload: 'Starting new instance. Reason: DEPLOYMENT_ROLLOUT - Instance started
+  due to traffic shifting between revisions due to deployment, traffic split adjustment,
+  or deployment health check.'
+timestamp: '2026-01-10T21:09:45.365693Z'
+---
+insertId: 474youdv4q4
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Factivity
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  authenticationInfo:
+    oauthInfo:
+      oauthClientId: 32555940559.apps.googleusercontent.com
+    principalEmail: tsta2math@gmail.com
+    principalSubject: user:tsta2math@gmail.com
+  authorizationInfo:
+  - granted: true
+    permission: run.services.update
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes: {}
+  - granted: true
+    permission: run.services.update
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes:
+      name: namespaces/aga-poc/services/service-b
+      service: run.googleapis.com/
+      type: run.googleapis.com/Service
+  methodName: google.cloud.run.v1.Services.ReplaceService
+  request:
+    '@type': type.googleapis.com/google.cloud.run.v1.ReplaceServiceRequest
+    name: namespaces/aga-poc/services/service-b
+    service:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      metadata:
+        annotations:
+          run.googleapis.com/build-enable-automatic-updates: 'false'
+          run.googleapis.com/build-id: db81e6a8-9765-429e-84e7-b7a32d7c34e6
+          run.googleapis.com/build-image-uri: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+          run.googleapis.com/build-name: projects/374053446416/locations/asia-northeast1/builds/db81e6a8-9765-429e-84e7-b7a32d7c34e6
+          run.googleapis.com/build-source-location: gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768079363.307947-3fed70b5cff44d9fa8e69a6c6b03531b.zip#1768079363392015
+          run.googleapis.com/client-name: gcloud
+          run.googleapis.com/client-version: 551.0.0
+          run.googleapis.com/ingress: all
+          run.googleapis.com/ingress-status: all
+          run.googleapis.com/maxScale: '5'
+          run.googleapis.com/operation-id: 9874bd61-42fe-4b2f-9c40-012551b3a332
+          run.googleapis.com/urls: '["https://service-b-374053446416.asia-northeast1.run.app"]'
+          serving.knative.dev/creator: tsta2math@gmail.com
+          serving.knative.dev/lastModifier: tsta2math@gmail.com
+        creationTimestamp: '2026-01-10T20:31:56.326515Z'
+        generation: 2
+        labels:
+          cloud.googleapis.com/location: asia-northeast1
+        name: service-b
+        namespace: '374053446416'
+        resourceVersion: AAZIDvfTWss
+        selfLink: /apis/serving.knative.dev/v1/namespaces/374053446416/services/service-b
+        uid: 3b9a6e59-5ea5-4ce0-9bdc-ab88438bd4db
+      spec:
+        template:
+          metadata:
+            annotations:
+              autoscaling.knative.dev/maxScale: '5'
+              run.googleapis.com/client-name: gcloud
+              run.googleapis.com/client-version: 551.0.0
+              run.googleapis.com/startup-cpu-boost: 'true'
+            labels:
+              client.knative.dev/nonce: whfjudbpwv
+              run.googleapis.com/startupProbeType: Default
+          spec:
+            containerConcurrency: 80
+            containers:
+            - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:20df874dab6c4addfd50c3af6b39e96d5a484fdde65990ab3d728b4420540180
+              resources:
+                limits:
+                  cpu: 1000m
+                  memory: 512Mi
+            serviceAccountName: 374053446416-compute@developer.gserviceaccount.com
+            timeoutSeconds: 300
+        traffic:
+        - latestRevision: true
+          percent: 100
+      status:
+        conditions:
+        - lastTransitionTime: '2026-01-10T21:03:04.438868Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: Ready
+        - lastTransitionTime: '2026-01-10T21:03:04.384933Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: ConfigurationsReady
+        - lastTransitionTime: '2026-01-10T21:03:04.438868Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: RoutesReady
+        latestCreatedRevisionName: service-b-00002-6q7
+        observedGeneration: 2
+  requestMetadata:
+    callerIp: 2404:7a81:2161:cb00:b467:577:324a:b6bc
+    callerSuppliedUserAgent: google-cloud-sdk gcloud/551.0.0 command/gcloud.run.deploy
+      invocation-id/c31ae66447bf4cf6a4546d7f9db8e032 environment/None environment-version/None
+      client-os/MACOSX client-os-ver/23.6.0 client-pltf-arch/arm interactive/True
+      from-script/False python/3.13.11 term/xterm-256color  (Macintosh; Intel Mac
+      OS X 23.6.0),gzip(gfe)
+    destinationAttributes: {}
+    requestAttributes:
+      auth: {}
+      time: '2026-01-10T21:09:41.973603Z'
+  resourceLocation:
+    currentLocations:
+    - asia-northeast1
+  resourceName: namespaces/aga-poc/services/service-b
+  serviceName: run.googleapis.com
+receiveTimestamp: '2026-01-10T21:09:42.969256837Z'
+resource:
+  labels:
+    configuration_name: ''
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: ''
+    service_name: service-b
+  type: cloud_run_revision
+severity: NOTICE
+timestamp: '2026-01-10T21:09:41.142304Z'
+---
+insertId: 1b866kcdhqiq
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Factivity
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  authenticationInfo:
+    oauthInfo:
+      oauthClientId: 32555940559.apps.googleusercontent.com
+    principalEmail: tsta2math@gmail.com
+    principalSubject: user:tsta2math@gmail.com
+  authorizationInfo:
+  - granted: true
+    permission: run.services.update
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes: {}
+  - granted: true
+    permission: run.services.update
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes:
+      name: namespaces/aga-poc/services/service-b
+      service: run.googleapis.com/
+      type: run.googleapis.com/Service
+  methodName: google.cloud.run.v1.Services.ReplaceService
+  request:
+    '@type': type.googleapis.com/google.cloud.run.v1.ReplaceServiceRequest
+    dryRun: all
+    name: namespaces/aga-poc/services/service-b
+    service:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      metadata:
+        annotations:
+          run.googleapis.com/build-enable-automatic-updates: 'false'
+          run.googleapis.com/build-id: 170521af-3ef0-4160-aedf-823ac936884b
+          run.googleapis.com/build-image-uri: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+          run.googleapis.com/build-name: projects/374053446416/locations/asia-northeast1/builds/170521af-3ef0-4160-aedf-823ac936884b
+          run.googleapis.com/build-source-location: gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768078963.786827-68b7d9eff6a548f1be4ce6ebaa644eef.zip#1768078963864566
+          run.googleapis.com/client-name: gcloud
+          run.googleapis.com/client-version: 551.0.0
+          run.googleapis.com/ingress: all
+          run.googleapis.com/ingress-status: all
+          run.googleapis.com/maxScale: '5'
+          run.googleapis.com/operation-id: 9874bd61-42fe-4b2f-9c40-012551b3a332
+          run.googleapis.com/urls: '["https://service-b-374053446416.asia-northeast1.run.app"]'
+          serving.knative.dev/creator: tsta2math@gmail.com
+          serving.knative.dev/lastModifier: tsta2math@gmail.com
+        creationTimestamp: '2026-01-10T20:31:56.326515Z'
+        generation: 2
+        labels:
+          cloud.googleapis.com/location: asia-northeast1
+        name: service-b
+        namespace: '374053446416'
+        resourceVersion: AAZIDvfTWss
+        selfLink: /apis/serving.knative.dev/v1/namespaces/374053446416/services/service-b
+        uid: 3b9a6e59-5ea5-4ce0-9bdc-ab88438bd4db
+      spec:
+        template:
+          metadata:
+            annotations:
+              autoscaling.knative.dev/maxScale: '5'
+              run.googleapis.com/client-name: gcloud
+              run.googleapis.com/client-version: 551.0.0
+              run.googleapis.com/startup-cpu-boost: 'true'
+            labels:
+              client.knative.dev/nonce: fwdvxlpqoz
+              run.googleapis.com/startupProbeType: Default
+          spec:
+            containerConcurrency: 80
+            containers:
+            - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+              resources:
+                limits:
+                  cpu: 1000m
+                  memory: 512Mi
+            serviceAccountName: 374053446416-compute@developer.gserviceaccount.com
+            timeoutSeconds: 300
+        traffic:
+        - latestRevision: true
+          percent: 100
+      status:
+        conditions:
+        - lastTransitionTime: '2026-01-10T21:03:04.438868Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: Ready
+        - lastTransitionTime: '2026-01-10T21:03:04.384933Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: ConfigurationsReady
+        - lastTransitionTime: '2026-01-10T21:03:04.438868Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: RoutesReady
+        latestCreatedRevisionName: service-b-00002-6q7
+        observedGeneration: 2
+  requestMetadata:
+    callerIp: 2404:7a81:2161:cb00:b467:577:324a:b6bc
+    callerSuppliedUserAgent: google-cloud-sdk gcloud/551.0.0 command/gcloud.run.deploy
+      invocation-id/c31ae66447bf4cf6a4546d7f9db8e032 environment/None environment-version/None
+      client-os/MACOSX client-os-ver/23.6.0 client-pltf-arch/arm interactive/True
+      from-script/False python/3.13.11 term/xterm-256color  (Macintosh; Intel Mac
+      OS X 23.6.0),gzip(gfe)
+    destinationAttributes: {}
+    requestAttributes:
+      auth: {}
+      time: '2026-01-10T21:09:22.655509Z'
+  resourceLocation:
+    currentLocations:
+    - asia-northeast1
+  resourceName: namespaces/aga-poc/services/service-b
+  serviceName: run.googleapis.com
+receiveTimestamp: '2026-01-10T21:09:23.030725452Z'
+resource:
+  labels:
+    configuration_name: ''
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: ''
+    service_name: service-b
+  type: cloud_run_revision
+severity: NOTICE
+timestamp: '2026-01-10T21:09:21.745521Z'
+---
+insertId: -qba8asdi87k
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Fsystem_event
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  methodName: /Services.ReplaceService
+  resourceName: namespaces/aga-poc/services/service-b
+  response:
+    '@type': type.googleapis.com/google.cloud.run.v1.Service
+    apiVersion: serving.knative.dev/v1
+    kind: Service
+    metadata:
+      annotations:
+        run.googleapis.com/build-enable-automatic-updates: 'false'
+        run.googleapis.com/build-id: 170521af-3ef0-4160-aedf-823ac936884b
+        run.googleapis.com/build-image-uri: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+        run.googleapis.com/build-name: projects/374053446416/locations/asia-northeast1/builds/170521af-3ef0-4160-aedf-823ac936884b
+        run.googleapis.com/build-source-location: gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768078963.786827-68b7d9eff6a548f1be4ce6ebaa644eef.zip#1768078963864566
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 551.0.0
+        run.googleapis.com/ingress: all
+        run.googleapis.com/ingress-status: all
+        run.googleapis.com/maxScale: '5'
+        run.googleapis.com/operation-id: 9874bd61-42fe-4b2f-9c40-012551b3a332
+        run.googleapis.com/urls: '["https://service-b-374053446416.asia-northeast1.run.app"]'
+        serving.knative.dev/creator: tsta2math@gmail.com
+        serving.knative.dev/lastModifier: tsta2math@gmail.com
+      creationTimestamp: '2026-01-10T20:31:56.326515Z'
+      generation: 2
+      labels:
+        cloud.googleapis.com/location: asia-northeast1
+      name: service-b
+      namespace: '374053446416'
+      resourceVersion: AAZIDvfNH+A
+      selfLink: /apis/serving.knative.dev/v1/namespaces/374053446416/services/service-b
+      uid: 3b9a6e59-5ea5-4ce0-9bdc-ab88438bd4db
+    spec:
+      template:
+        metadata:
+          annotations:
+            autoscaling.knative.dev/maxScale: '5'
+            run.googleapis.com/client-name: gcloud
+            run.googleapis.com/client-version: 551.0.0
+            run.googleapis.com/startup-cpu-boost: 'true'
+          labels:
+            client.knative.dev/nonce: eggsepaooo
+            run.googleapis.com/startupProbeType: Default
+        spec:
+          containerConcurrency: 80
+          containers:
+          - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:5785b3251445bf7aac6c62a847408e2a137fd5194451efb65fef438e7cb25288
+            ports:
+            - containerPort: 8181
+              name: http1
+            resources:
+              limits:
+                cpu: 1000m
+                memory: 512Mi
+            startupProbe:
+              failureThreshold: 1
+              periodSeconds: 240
+              tcpSocket:
+                port: 8181
+              timeoutSeconds: 240
+          serviceAccountName: 374053446416-compute@developer.gserviceaccount.com
+          timeoutSeconds: 300
+      traffic:
+      - latestRevision: true
+        percent: 100
+    status:
+      conditions:
+      - lastTransitionTime: '2026-01-10T21:03:04.384933Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00002-6q7&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00002-6q7%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: Ready
+      - lastTransitionTime: '2026-01-10T21:03:04.384933Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00002-6q7&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00002-6q7%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: ConfigurationsReady
+      - lastTransitionTime: '2026-01-10T21:03:01.644371Z'
+        message: Provisioning revision instances to receive traffic.
+        status: Unknown
+        type: RoutesReady
+      latestCreatedRevisionName: service-b-00002-6q7
+      observedGeneration: 2
+  serviceName: run.googleapis.com
+  status:
+    code: 9
+    message: |-
+      Ready condition status changed to False for Service service-b with message: The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+      Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00002-6q7&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00002-6q7%22 
+      For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+receiveTimestamp: '2026-01-10T21:03:05.091032908Z'
+resource:
+  labels:
+    configuration_name: ''
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: ''
+    service_name: service-b
+  type: cloud_run_revision
+severity: ERROR
+timestamp: '2026-01-10T21:03:04.436655Z'
+---
+insertId: 79wnned34yk
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Fsystem_event
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  methodName: /Services.ReplaceService
+  resourceName: namespaces/aga-poc/revisions/service-b-00002-6q7
+  response:
+    '@type': type.googleapis.com/google.cloud.run.v1.Revision
+    apiVersion: serving.knative.dev/v1
+    kind: Revision
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '5'
+        run.googleapis.com/build-source-location: '{"service-b-1":"gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768078963.786827-68b7d9eff6a548f1be4ce6ebaa644eef.zip#1768078963864566"}'
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 551.0.0
+        run.googleapis.com/operation-id: 9874bd61-42fe-4b2f-9c40-012551b3a332
+        run.googleapis.com/startup-cpu-boost: 'true'
+        serving.knative.dev/creator: tsta2math@gmail.com
+      creationTimestamp: '2026-01-10T21:02:59.796764Z'
+      generation: 1
+      labels:
+        client.knative.dev/nonce: eggsepaooo
+        cloud.googleapis.com/location: asia-northeast1
+        run.googleapis.com/startupProbeType: Default
+        serving.knative.dev/configuration: service-b
+        serving.knative.dev/configurationGeneration: '2'
+        serving.knative.dev/route: service-b
+        serving.knative.dev/service: service-b
+        serving.knative.dev/serviceUid: 3b9a6e59-5ea5-4ce0-9bdc-ab88438bd4db
+      name: service-b-00002-6q7
+      namespace: '374053446416'
+      ownerReferences:
+      - apiVersion: serving.knative.dev/v1
+        blockOwnerDeletion: true
+        controller: true
+        kind: Configuration
+        name: service-b
+        uid: 98048577-a192-4b96-999f-e07a05f8df44
+      resourceVersion: AAZIDvfMBgc
+      selfLink: /apis/serving.knative.dev/v1/namespaces/374053446416/revisions/service-b-00002-6q7
+      uid: 137ef369-b87e-40ae-804c-c1b35d0b1aea
+    spec:
+      containerConcurrency: 80
+      containers:
+      - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:5785b3251445bf7aac6c62a847408e2a137fd5194451efb65fef438e7cb25288
+        name: service-b-1
+        ports:
+        - containerPort: 8181
+          name: http1
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        startupProbe:
+          failureThreshold: 1
+          periodSeconds: 240
+          tcpSocket:
+            port: 8181
+          timeoutSeconds: 240
+      serviceAccountName: 374053446416-compute@developer.gserviceaccount.com
+      timeoutSeconds: 300
+    status:
+      conditions:
+      - lastTransitionTime: '2026-01-10T21:03:04.349191Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00002-6q7&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00002-6q7%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: Ready
+      - lastTransitionTime: '2026-01-10T21:03:04.349191Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00002-6q7&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00002-6q7%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: ContainerHealthy
+      - lastTransitionTime: '2026-01-10T21:03:01.546793Z'
+        message: Container image import completed in 1.22s.
+        status: 'True'
+        type: ContainerReady
+      - lastTransitionTime: '2026-01-10T21:03:02.934794Z'
+        message: Provisioning imported containers completed in 1.39s. Checking container
+          health. This will wait for up to 4m for the configured startup probe, including
+          an initial delay of 0s.
+        status: 'True'
+        type: ResourcesAvailable
+      - lastTransitionTime: '2026-01-10T21:03:02.934794Z'
+        message: System will retry after 00:00 from lastTransitionTime for attempt
+          0.
+        reason: ImmediateRetry
+        severity: Info
+        status: 'True'
+        type: Retry
+      containerStatuses:
+      - imageDigest: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:5785b3251445bf7aac6c62a847408e2a137fd5194451efb65fef438e7cb25288
+        name: service-b-1
+      imageDigest: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:5785b3251445bf7aac6c62a847408e2a137fd5194451efb65fef438e7cb25288
+      logUrl: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00002-6q7&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00002-6q7%22
+      observedGeneration: 1
+  serviceName: run.googleapis.com
+  status:
+    code: 9
+    message: |-
+      Ready condition status changed to False for Revision service-b-00002-6q7 with message: The user-provided container failed to start and listen on the port defined provided by the PORT=8181 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+      Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00002-6q7&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00002-6q7%22 
+      For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+receiveTimestamp: '2026-01-10T21:03:05.098948414Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00002-6q7
+    service_name: service-b
+  type: cloud_run_revision
+severity: ERROR
+timestamp: '2026-01-10T21:03:04.359081Z'
+---
+insertId: 6962be8800054e9ab7d82869
+labels:
+  instanceId: 005eb6974cfb1cc84f7d5ef5e3121bd8d30f9c1b247b640f37528c4e9a72042c2a8300902985f6b279aa7bcd1b50174aca8c3889c84a40ae51b50802f01532b57c6d419d348dd66a505d9c911bb18739ce76
+logName: projects/aga-poc/logs/run.googleapis.com%2Fvarlog%2Fsystem
+receiveTimestamp: '2026-01-10T21:03:04.383916391Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00002-6q7
+    service_name: service-b
+  type: cloud_run_revision
+severity: ERROR
+textPayload: |-
+  Default STARTUP TCP probe failed 1 time consecutively for container "service-b-1" on port 8181. The instance was not started.
+  Connection failed with status CANCELLED.
+timestamp: '2026-01-10T21:03:04.347802Z'
+---
+insertId: 6962be880003c801022e1976
+labels:
+  container_name: service-b-1
+  instanceId: 005eb6974cfb1cc84f7d5ef5e3121bd8d30f9c1b247b640f37528c4e9a72042c2a8300902985f6b279aa7bcd1b50174aca8c3889c84a40ae51b50802f01532b57c6d419d348dd66a505d9c911bb18739ce76
+logName: projects/aga-poc/logs/run.googleapis.com%2Fvarlog%2Fsystem
+receiveTimestamp: '2026-01-10T21:03:04.383916391Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00002-6q7
+    service_name: service-b
+  type: cloud_run_revision
+severity: WARNING
+textPayload: Container called exit(1).
+timestamp: '2026-01-10T21:03:04.245870476Z'
+---
+insertId: 6962be87000c43ceeae3a7fb
+labels:
+  instanceId: 005eb6974cfb1cc84f7d5ef5e3121bd8d30f9c1b247b640f37528c4e9a72042c2a8300902985f6b279aa7bcd1b50174aca8c3889c84a40ae51b50802f01532b57c6d419d348dd66a505d9c911bb18739ce76
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:03:03.806002404Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00002-6q7
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: '/policy/authorization.rego:37: rego_parse_error: var cannot be used
+  for rule name'
+timestamp: '2026-01-10T21:03:03.803790Z'
+---
+insertId: 6962be87000c43cbe3f7f1f3
+labels:
+  instanceId: 005eb6974cfb1cc84f7d5ef5e3121bd8d30f9c1b247b640f37528c4e9a72042c2a8300902985f6b279aa7bcd1b50174aca8c3889c84a40ae51b50802f01532b57c6d419d348dd66a505d9c911bb18739ce76
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:03:03.806002404Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00002-6q7
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: '/policy/authorization.rego:30: rego_parse_error: var cannot be used
+  for rule name'
+timestamp: '2026-01-10T21:03:03.803787Z'
+---
+insertId: 6962be87000c43c9d7dfeef9
+labels:
+  instanceId: 005eb6974cfb1cc84f7d5ef5e3121bd8d30f9c1b247b640f37528c4e9a72042c2a8300902985f6b279aa7bcd1b50174aca8c3889c84a40ae51b50802f01532b57c6d419d348dd66a505d9c911bb18739ce76
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:03:03.806002404Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00002-6q7
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: '/policy/authorization.rego:24: rego_parse_error: var cannot be used
+  for rule name'
+timestamp: '2026-01-10T21:03:03.803785Z'
+---
+insertId: 6962be87000c43c69de12562
+labels:
+  instanceId: 005eb6974cfb1cc84f7d5ef5e3121bd8d30f9c1b247b640f37528c4e9a72042c2a8300902985f6b279aa7bcd1b50174aca8c3889c84a40ae51b50802f01532b57c6d419d348dd66a505d9c911bb18739ce76
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:03:03.806002404Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00002-6q7
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: '/policy/authorization.rego:19: rego_parse_error: var cannot be used
+  for rule name'
+timestamp: '2026-01-10T21:03:03.803782Z'
+---
+insertId: 6962be87000c43c31bcf8894
+labels:
+  instanceId: 005eb6974cfb1cc84f7d5ef5e3121bd8d30f9c1b247b640f37528c4e9a72042c2a8300902985f6b279aa7bcd1b50174aca8c3889c84a40ae51b50802f01532b57c6d419d348dd66a505d9c911bb18739ce76
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:03:03.806002404Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00002-6q7
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: '/policy/authorization.rego:8: rego_parse_error: var cannot be used for
+  rule name'
+timestamp: '2026-01-10T21:03:03.803779Z'
+---
+insertId: 6962be87000c43b3b296ea14
+labels:
+  instanceId: 005eb6974cfb1cc84f7d5ef5e3121bd8d30f9c1b247b640f37528c4e9a72042c2a8300902985f6b279aa7bcd1b50174aca8c3889c84a40ae51b50802f01532b57c6d419d348dd66a505d9c911bb18739ce76
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstdout
+receiveTimestamp: '2026-01-10T21:03:03.806002404Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00002-6q7
+    service_name: service-b
+  type: cloud_run_revision
+textPayload: 'error: load error: 5 errors occurred during loading:'
+timestamp: '2026-01-10T21:03:03.803763Z'
+---
+insertId: 6962be870000bb414d4de742
+labels:
+  instanceId: 005eb6974cfb1cc84f7d5ef5e3121bd8d30f9c1b247b640f37528c4e9a72042c2a8300902985f6b279aa7bcd1b50174aca8c3889c84a40ae51b50802f01532b57c6d419d348dd66a505d9c911bb18739ce76
+  scaling_reason: DEPLOYMENT_ROLLOUT
+logName: projects/aga-poc/logs/run.googleapis.com%2Fvarlog%2Fsystem
+receiveTimestamp: '2026-01-10T21:03:03.052429939Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00002-6q7
+    service_name: service-b
+  type: cloud_run_revision
+severity: INFO
+textPayload: 'Starting new instance. Reason: DEPLOYMENT_ROLLOUT - Instance started
+  due to traffic shifting between revisions due to deployment, traffic split adjustment,
+  or deployment health check.'
+timestamp: '2026-01-10T21:03:03.047937Z'
+---
+insertId: 185njy6e12wtf
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Factivity
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  authenticationInfo:
+    oauthInfo:
+      oauthClientId: 32555940559.apps.googleusercontent.com
+    principalEmail: tsta2math@gmail.com
+    principalSubject: user:tsta2math@gmail.com
+  authorizationInfo:
+  - granted: true
+    permission: run.services.update
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes: {}
+  - granted: true
+    permission: run.services.update
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes:
+      name: namespaces/aga-poc/services/service-b
+      service: run.googleapis.com/
+      type: run.googleapis.com/Service
+  methodName: google.cloud.run.v1.Services.ReplaceService
+  request:
+    '@type': type.googleapis.com/google.cloud.run.v1.ReplaceServiceRequest
+    name: namespaces/aga-poc/services/service-b
+    service:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      metadata:
+        annotations:
+          run.googleapis.com/build-enable-automatic-updates: 'false'
+          run.googleapis.com/build-id: 170521af-3ef0-4160-aedf-823ac936884b
+          run.googleapis.com/build-image-uri: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+          run.googleapis.com/build-name: projects/374053446416/locations/asia-northeast1/builds/170521af-3ef0-4160-aedf-823ac936884b
+          run.googleapis.com/build-source-location: gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768078963.786827-68b7d9eff6a548f1be4ce6ebaa644eef.zip#1768078963864566
+          run.googleapis.com/client-name: gcloud
+          run.googleapis.com/client-version: 551.0.0
+          run.googleapis.com/ingress: all
+          run.googleapis.com/ingress-status: all
+          run.googleapis.com/maxScale: '5'
+          run.googleapis.com/operation-id: f8a59f10-1fbf-4540-bb66-59b66cee0e32
+          run.googleapis.com/urls: '["https://service-b-374053446416.asia-northeast1.run.app"]'
+          serving.knative.dev/creator: tsta2math@gmail.com
+          serving.knative.dev/lastModifier: tsta2math@gmail.com
+        creationTimestamp: '2026-01-10T20:31:56.326515Z'
+        generation: 1
+        labels:
+          cloud.googleapis.com/location: asia-northeast1
+        name: service-b
+        namespace: '374053446416'
+        resourceVersion: AAZIDpcQxaU
+        selfLink: /apis/serving.knative.dev/v1/namespaces/374053446416/services/service-b
+        uid: 3b9a6e59-5ea5-4ce0-9bdc-ab88438bd4db
+      spec:
+        template:
+          metadata:
+            annotations:
+              autoscaling.knative.dev/maxScale: '5'
+              run.googleapis.com/client-name: gcloud
+              run.googleapis.com/client-version: 551.0.0
+              run.googleapis.com/startup-cpu-boost: 'true'
+            labels:
+              client.knative.dev/nonce: eggsepaooo
+              run.googleapis.com/startupProbeType: Default
+          spec:
+            containerConcurrency: 80
+            containers:
+            - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:5785b3251445bf7aac6c62a847408e2a137fd5194451efb65fef438e7cb25288
+              resources:
+                limits:
+                  cpu: 1000m
+                  memory: 512Mi
+            serviceAccountName: 374053446416-compute@developer.gserviceaccount.com
+            timeoutSeconds: 300
+        traffic:
+        - latestRevision: true
+          percent: 100
+      status:
+        conditions:
+        - lastTransitionTime: '2026-01-10T20:36:01.423242Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: Ready
+        - lastTransitionTime: '2026-01-10T20:36:01.356704Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: ConfigurationsReady
+        - lastTransitionTime: '2026-01-10T20:36:01.423242Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: RoutesReady
+        latestCreatedRevisionName: service-b-00001-chl
+        observedGeneration: 1
+  requestMetadata:
+    callerIp: 2404:7a81:2161:cb00:b467:577:324a:b6bc
+    callerSuppliedUserAgent: google-cloud-sdk gcloud/551.0.0 command/gcloud.run.deploy
+      invocation-id/1b5721ec2748479e97bab67c2e09e2f2 environment/None environment-version/None
+      client-os/MACOSX client-os-ver/23.6.0 client-pltf-arch/arm interactive/True
+      from-script/False python/3.13.11 term/xterm-256color  (Macintosh; Intel Mac
+      OS X 23.6.0),gzip(gfe)
+    destinationAttributes: {}
+    requestAttributes:
+      auth: {}
+      time: '2026-01-10T21:02:59.753096Z'
+  resourceLocation:
+    currentLocations:
+    - asia-northeast1
+  resourceName: namespaces/aga-poc/services/service-b
+  serviceName: run.googleapis.com
+receiveTimestamp: '2026-01-10T21:03:00.489671659Z'
+resource:
+  labels:
+    configuration_name: ''
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: ''
+    service_name: service-b
+  type: cloud_run_revision
+severity: NOTICE
+timestamp: '2026-01-10T21:02:58.895030Z'
+---
+insertId: vy7j0ad8li0
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Factivity
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  authenticationInfo:
+    oauthInfo:
+      oauthClientId: 32555940559.apps.googleusercontent.com
+    principalEmail: tsta2math@gmail.com
+    principalSubject: user:tsta2math@gmail.com
+  authorizationInfo:
+  - granted: true
+    permission: run.services.update
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes: {}
+  - granted: true
+    permission: run.services.update
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes:
+      name: namespaces/aga-poc/services/service-b
+      service: run.googleapis.com/
+      type: run.googleapis.com/Service
+  methodName: google.cloud.run.v1.Services.ReplaceService
+  request:
+    '@type': type.googleapis.com/google.cloud.run.v1.ReplaceServiceRequest
+    dryRun: all
+    name: namespaces/aga-poc/services/service-b
+    service:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      metadata:
+        annotations:
+          run.googleapis.com/build-enable-automatic-updates: 'false'
+          run.googleapis.com/build-id: 04d2da1a-12ae-4b4a-8d96-ea72c41407bc
+          run.googleapis.com/build-image-uri: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+          run.googleapis.com/build-name: projects/374053446416/locations/asia-northeast1/builds/04d2da1a-12ae-4b4a-8d96-ea72c41407bc
+          run.googleapis.com/build-source-location: gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768077094.876717-7f0300fb9b04475d941041a4a2f744c4.zip#1768077094964392
+          run.googleapis.com/client-name: gcloud
+          run.googleapis.com/client-version: 551.0.0
+          run.googleapis.com/ingress: all
+          run.googleapis.com/ingress-status: all
+          run.googleapis.com/maxScale: '5'
+          run.googleapis.com/operation-id: f8a59f10-1fbf-4540-bb66-59b66cee0e32
+          run.googleapis.com/urls: '["https://service-b-374053446416.asia-northeast1.run.app"]'
+          serving.knative.dev/creator: tsta2math@gmail.com
+          serving.knative.dev/lastModifier: tsta2math@gmail.com
+        creationTimestamp: '2026-01-10T20:31:56.326515Z'
+        generation: 1
+        labels:
+          cloud.googleapis.com/location: asia-northeast1
+        name: service-b
+        namespace: '374053446416'
+        resourceVersion: AAZIDpcQxaU
+        selfLink: /apis/serving.knative.dev/v1/namespaces/374053446416/services/service-b
+        uid: 3b9a6e59-5ea5-4ce0-9bdc-ab88438bd4db
+      spec:
+        template:
+          metadata:
+            annotations:
+              autoscaling.knative.dev/maxScale: '5'
+              run.googleapis.com/client-name: gcloud
+              run.googleapis.com/client-version: 551.0.0
+              run.googleapis.com/startup-cpu-boost: 'true'
+            labels:
+              client.knative.dev/nonce: nefcawjlcf
+              run.googleapis.com/startupProbeType: Default
+          spec:
+            containerConcurrency: 80
+            containers:
+            - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+              resources:
+                limits:
+                  cpu: 1000m
+                  memory: 512Mi
+            serviceAccountName: 374053446416-compute@developer.gserviceaccount.com
+            timeoutSeconds: 300
+        traffic:
+        - latestRevision: true
+          percent: 100
+      status:
+        conditions:
+        - lastTransitionTime: '2026-01-10T20:36:01.423242Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: Ready
+        - lastTransitionTime: '2026-01-10T20:36:01.356704Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: ConfigurationsReady
+        - lastTransitionTime: '2026-01-10T20:36:01.423242Z'
+          reason: HealthCheckContainerError
+          status: 'False'
+          type: RoutesReady
+        latestCreatedRevisionName: service-b-00001-chl
+        observedGeneration: 1
+  requestMetadata:
+    callerIp: 2404:7a81:2161:cb00:b467:577:324a:b6bc
+    callerSuppliedUserAgent: google-cloud-sdk gcloud/551.0.0 command/gcloud.run.deploy
+      invocation-id/1b5721ec2748479e97bab67c2e09e2f2 environment/None environment-version/None
+      client-os/MACOSX client-os-ver/23.6.0 client-pltf-arch/arm interactive/True
+      from-script/False python/3.13.11 term/xterm-256color  (Macintosh; Intel Mac
+      OS X 23.6.0),gzip(gfe)
+    destinationAttributes: {}
+    requestAttributes:
+      auth: {}
+      time: '2026-01-10T21:02:43.478933Z'
+  resourceLocation:
+    currentLocations:
+    - asia-northeast1
+  resourceName: namespaces/aga-poc/services/service-b
+  serviceName: run.googleapis.com
+receiveTimestamp: '2026-01-10T21:02:43.671801347Z'
+resource:
+  labels:
+    configuration_name: ''
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: ''
+    service_name: service-b
+  type: cloud_run_revision
+severity: NOTICE
+timestamp: '2026-01-10T21:02:42.719723Z'
+---
+insertId: -k7o5jwdf8oe
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Fsystem_event
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  methodName: /Services.CreateService
+  resourceName: namespaces/aga-poc/services/service-b
+  response:
+    '@type': type.googleapis.com/google.cloud.run.v1.Service
+    apiVersion: serving.knative.dev/v1
+    kind: Service
+    metadata:
+      annotations:
+        run.googleapis.com/build-enable-automatic-updates: 'false'
+        run.googleapis.com/build-id: 04d2da1a-12ae-4b4a-8d96-ea72c41407bc
+        run.googleapis.com/build-image-uri: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+        run.googleapis.com/build-name: projects/374053446416/locations/asia-northeast1/builds/04d2da1a-12ae-4b4a-8d96-ea72c41407bc
+        run.googleapis.com/build-source-location: gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768077094.876717-7f0300fb9b04475d941041a4a2f744c4.zip#1768077094964392
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 551.0.0
+        run.googleapis.com/ingress: all
+        run.googleapis.com/ingress-status: all
+        run.googleapis.com/maxScale: '5'
+        run.googleapis.com/operation-id: f8a59f10-1fbf-4540-bb66-59b66cee0e32
+        run.googleapis.com/urls: '["https://service-b-374053446416.asia-northeast1.run.app"]'
+        serving.knative.dev/creator: tsta2math@gmail.com
+        serving.knative.dev/lastModifier: tsta2math@gmail.com
+      creationTimestamp: '2026-01-10T20:31:56.326515Z'
+      generation: 1
+      labels:
+        cloud.googleapis.com/location: asia-northeast1
+      name: service-b
+      namespace: '374053446416'
+      resourceVersion: AAZIDpcPlLA
+      selfLink: /apis/serving.knative.dev/v1/namespaces/374053446416/services/service-b
+      uid: 3b9a6e59-5ea5-4ce0-9bdc-ab88438bd4db
+    spec:
+      template:
+        metadata:
+          annotations:
+            autoscaling.knative.dev/maxScale: '5'
+            run.googleapis.com/client-name: gcloud
+            run.googleapis.com/client-version: 551.0.0
+            run.googleapis.com/startup-cpu-boost: 'true'
+          labels:
+            client.knative.dev/nonce: udfpclswnn
+            run.googleapis.com/startupProbeType: Default
+        spec:
+          containerConcurrency: 80
+          containers:
+          - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:ef1cd4cccd5aa05337715e49b9c1bce3f4da44ae80271071c9b084de407a4911
+            ports:
+            - containerPort: 8080
+              name: http1
+            resources:
+              limits:
+                cpu: 1000m
+                memory: 512Mi
+            startupProbe:
+              failureThreshold: 1
+              periodSeconds: 240
+              tcpSocket:
+                port: 8080
+              timeoutSeconds: 240
+          serviceAccountName: 374053446416-compute@developer.gserviceaccount.com
+          timeoutSeconds: 300
+      traffic:
+      - latestRevision: true
+        percent: 100
+    status:
+      conditions:
+      - lastTransitionTime: '2026-01-10T20:36:01.356704Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00001-chl&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00001-chl%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: Ready
+      - lastTransitionTime: '2026-01-10T20:36:01.356704Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00001-chl&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00001-chl%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: ConfigurationsReady
+      - lastTransitionTime: '2026-01-10T20:31:58.493841Z'
+        message: Provisioning revision instances to receive traffic.
+        status: Unknown
+        type: RoutesReady
+      latestCreatedRevisionName: service-b-00001-chl
+      observedGeneration: 1
+  serviceName: run.googleapis.com
+  status:
+    code: 9
+    message: |-
+      Ready condition status changed to False for Service service-b with message: The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+      Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00001-chl&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00001-chl%22 
+      For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+receiveTimestamp: '2026-01-10T20:36:02.119245479Z'
+resource:
+  labels:
+    configuration_name: ''
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: ''
+    service_name: service-b
+  type: cloud_run_revision
+severity: ERROR
+timestamp: '2026-01-10T20:36:01.397334Z'
+---
+insertId: -f8cr5gdh7cu
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Fsystem_event
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  methodName: /Services.CreateService
+  resourceName: namespaces/aga-poc/revisions/service-b-00001-chl
+  response:
+    '@type': type.googleapis.com/google.cloud.run.v1.Revision
+    apiVersion: serving.knative.dev/v1
+    kind: Revision
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '5'
+        run.googleapis.com/build-source-location: '{"service-b-1":"gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768077094.876717-7f0300fb9b04475d941041a4a2f744c4.zip#1768077094964392"}'
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 551.0.0
+        run.googleapis.com/operation-id: f8a59f10-1fbf-4540-bb66-59b66cee0e32
+        run.googleapis.com/startup-cpu-boost: 'true'
+        serving.knative.dev/creator: tsta2math@gmail.com
+      creationTimestamp: '2026-01-10T20:31:56.632212Z'
+      generation: 1
+      labels:
+        client.knative.dev/nonce: udfpclswnn
+        cloud.googleapis.com/location: asia-northeast1
+        run.googleapis.com/startupProbeType: Default
+        serving.knative.dev/configuration: service-b
+        serving.knative.dev/configurationGeneration: '1'
+        serving.knative.dev/route: service-b
+        serving.knative.dev/service: service-b
+        serving.knative.dev/serviceUid: 3b9a6e59-5ea5-4ce0-9bdc-ab88438bd4db
+      name: service-b-00001-chl
+      namespace: '374053446416'
+      ownerReferences:
+      - apiVersion: serving.knative.dev/v1
+        blockOwnerDeletion: true
+        controller: true
+        kind: Configuration
+        name: service-b
+        uid: 98048577-a192-4b96-999f-e07a05f8df44
+      resourceVersion: AAZIDpcOeYE
+      selfLink: /apis/serving.knative.dev/v1/namespaces/374053446416/revisions/service-b-00001-chl
+      uid: 2669ff3b-9ffd-4d14-8e74-321a19864829
+    spec:
+      containerConcurrency: 80
+      containers:
+      - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:ef1cd4cccd5aa05337715e49b9c1bce3f4da44ae80271071c9b084de407a4911
+        name: service-b-1
+        ports:
+        - containerPort: 8080
+          name: http1
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        startupProbe:
+          failureThreshold: 1
+          periodSeconds: 240
+          tcpSocket:
+            port: 8080
+          timeoutSeconds: 240
+      serviceAccountName: 374053446416-compute@developer.gserviceaccount.com
+      timeoutSeconds: 300
+    status:
+      conditions:
+      - lastTransitionTime: '2026-01-10T20:36:01.314177Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00001-chl&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00001-chl%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: Ready
+      - lastTransitionTime: '2026-01-10T20:36:01.314177Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00001-chl&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00001-chl%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: ContainerHealthy
+      - lastTransitionTime: '2026-01-10T20:31:58.410963Z'
+        message: Container image import completed in 1.23s.
+        status: 'True'
+        type: ContainerReady
+      - lastTransitionTime: '2026-01-10T20:32:00.917783Z'
+        message: Provisioning imported containers completed in 2.51s. Checking container
+          health. This will wait for up to 4m for the configured startup probe, including
+          an initial delay of 0s.
+        status: 'True'
+        type: ResourcesAvailable
+      - lastTransitionTime: '2026-01-10T20:32:00.917783Z'
+        message: System will retry after 00:00 from lastTransitionTime for attempt
+          0.
+        reason: ImmediateRetry
+        severity: Info
+        status: 'True'
+        type: Retry
+      containerStatuses:
+      - imageDigest: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:ef1cd4cccd5aa05337715e49b9c1bce3f4da44ae80271071c9b084de407a4911
+        name: service-b-1
+      imageDigest: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:ef1cd4cccd5aa05337715e49b9c1bce3f4da44ae80271071c9b084de407a4911
+      logUrl: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00001-chl&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00001-chl%22
+      observedGeneration: 1
+  serviceName: run.googleapis.com
+  status:
+    code: 9
+    message: |-
+      Ready condition status changed to False for Revision service-b-00001-chl with message: The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+      Logs URL: https://console.cloud.google.com/logs/viewer?project=aga-poc&resource=cloud_run_revision/service_name/service-b/revision_name/service-b-00001-chl&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22service-b%22%0Aresource.labels.revision_name%3D%22service-b-00001-chl%22 
+      For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+receiveTimestamp: '2026-01-10T20:36:01.760076354Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00001-chl
+    service_name: service-b
+  type: cloud_run_revision
+severity: ERROR
+timestamp: '2026-01-10T20:36:01.328498Z'
+---
+insertId: 6962b8310003216d0b9f268a
+labels:
+  instanceId: 005eb6974cd4b5db9254bd6540e15fd231ac00bada31202ccc11ad9183993bf03b15ea5c650ffac230985c00126e9ececd4b969716c9d94ae7bc187ff384d74c44ba9d200076d8cd5a8b0cf8163536b89f
+logName: projects/aga-poc/logs/run.googleapis.com%2Fvarlog%2Fsystem
+receiveTimestamp: '2026-01-10T20:36:01.207578231Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00001-chl
+    service_name: service-b
+  type: cloud_run_revision
+severity: ERROR
+textPayload: |-
+  Default STARTUP TCP probe failed 1 time consecutively for container "service-b-1" on port 8080. The instance was not started.
+  Connection failed with status DEADLINE_EXCEEDED.
+timestamp: '2026-01-10T20:36:01.205165Z'
+---
+insertId: 6962b7410000942ec30b9741
+labels:
+  instanceId: 005eb6974cd4b5db9254bd6540e15fd231ac00bada31202ccc11ad9183993bf03b15ea5c650ffac230985c00126e9ececd4b969716c9d94ae7bc187ff384d74c44ba9d200076d8cd5a8b0cf8163536b89f
+  scaling_reason: DEPLOYMENT_ROLLOUT
+logName: projects/aga-poc/logs/run.googleapis.com%2Fvarlog%2Fsystem
+receiveTimestamp: '2026-01-10T20:32:01.041406434Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00001-chl
+    service_name: service-b
+  type: cloud_run_revision
+severity: INFO
+textPayload: 'Starting new instance. Reason: DEPLOYMENT_ROLLOUT - Instance started
+  due to traffic shifting between revisions due to deployment, traffic split adjustment,
+  or deployment health check.'
+timestamp: '2026-01-10T20:32:01.037934Z'
+---
+insertId: 6962b741000a1d7090e05dbb
+jsonPayload:
+  addrs:
+  - 0.0.0.0:8181
+  diagnostic-addrs: []
+  level: info
+  msg: Initializing server.
+labels:
+  instanceId: 005eb6974cd4b5db9254bd6540e15fd231ac00bada31202ccc11ad9183993bf03b15ea5c650ffac230985c00126e9ececd4b969716c9d94ae7bc187ff384d74c44ba9d200076d8cd5a8b0cf8163536b89f
+logName: projects/aga-poc/logs/run.googleapis.com%2Fstderr
+receiveTimestamp: '2026-01-10T20:32:01.669142024Z'
+resource:
+  labels:
+    configuration_name: service-b
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: service-b-00001-chl
+    service_name: service-b
+  type: cloud_run_revision
+timestamp: '2026-01-10T20:32:01Z'
+---
+insertId: pag9y4dbr3e
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Factivity
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  authenticationInfo:
+    oauthInfo:
+      oauthClientId: 32555940559.apps.googleusercontent.com
+    principalEmail: tsta2math@gmail.com
+    principalSubject: user:tsta2math@gmail.com
+  authorizationInfo:
+  - granted: true
+    permission: run.services.create
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes: {}
+  - granted: true
+    permission: run.services.create
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes:
+      name: namespaces/aga-poc/services/service-b
+      service: run.googleapis.com/
+      type: run.googleapis.com/Service
+  methodName: google.cloud.run.v1.Services.CreateService
+  request:
+    '@type': type.googleapis.com/google.cloud.run.v1.CreateServiceRequest
+    parent: namespaces/aga-poc
+    service:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      metadata:
+        annotations:
+          run.googleapis.com/build-enable-automatic-updates: 'false'
+          run.googleapis.com/build-id: 04d2da1a-12ae-4b4a-8d96-ea72c41407bc
+          run.googleapis.com/build-image-uri: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+          run.googleapis.com/build-name: projects/374053446416/locations/asia-northeast1/builds/04d2da1a-12ae-4b4a-8d96-ea72c41407bc
+          run.googleapis.com/build-source-location: gs://run-sources-aga-poc-asia-northeast1/services/service-b/1768077094.876717-7f0300fb9b04475d941041a4a2f744c4.zip#1768077094964392
+          run.googleapis.com/client-name: gcloud
+          run.googleapis.com/client-version: 551.0.0
+        name: service-b
+        namespace: aga-poc
+      spec:
+        template:
+          metadata:
+            annotations:
+              autoscaling.knative.dev/maxScale: '5'
+              run.googleapis.com/client-name: gcloud
+              run.googleapis.com/client-version: 551.0.0
+              run.googleapis.com/startup-cpu-boost: 'True'
+            labels:
+              client.knative.dev/nonce: udfpclswnn
+          spec:
+            containers:
+            - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b@sha256:ef1cd4cccd5aa05337715e49b9c1bce3f4da44ae80271071c9b084de407a4911
+              name: ''
+      status: {}
+  requestMetadata:
+    callerIp: 2404:7a81:2161:cb00:b467:577:324a:b6bc
+    callerSuppliedUserAgent: google-cloud-sdk gcloud/551.0.0 command/gcloud.run.deploy
+      invocation-id/276a1adb53784f2593e3e13faab8b4bd environment/None environment-version/None
+      client-os/MACOSX client-os-ver/23.6.0 client-pltf-arch/arm interactive/True
+      from-script/False python/3.13.11 term/xterm-256color  (Macintosh; Intel Mac
+      OS X 23.6.0),gzip(gfe)
+    destinationAttributes: {}
+    requestAttributes:
+      auth: {}
+      time: '2026-01-10T20:31:56.575227Z'
+  resourceLocation:
+    currentLocations:
+    - asia-northeast1
+  resourceName: namespaces/aga-poc/services/service-b
+  serviceName: run.googleapis.com
+receiveTimestamp: '2026-01-10T20:31:56.919569422Z'
+resource:
+  labels:
+    configuration_name: ''
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: ''
+    service_name: service-b
+  type: cloud_run_revision
+severity: NOTICE
+timestamp: '2026-01-10T20:31:56.138235Z'
+---
+insertId: zuce1cddrbg
+logName: projects/aga-poc/logs/cloudaudit.googleapis.com%2Factivity
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  authenticationInfo:
+    oauthInfo:
+      oauthClientId: 32555940559.apps.googleusercontent.com
+    principalEmail: tsta2math@gmail.com
+    principalSubject: user:tsta2math@gmail.com
+  authorizationInfo:
+  - granted: true
+    permission: run.services.create
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes: {}
+  - granted: true
+    permission: run.services.create
+    permissionType: ADMIN_WRITE
+    resource: namespaces/aga-poc/services/service-b
+    resourceAttributes:
+      name: namespaces/aga-poc/services/service-b
+      service: run.googleapis.com/
+      type: run.googleapis.com/Service
+  methodName: google.cloud.run.v1.Services.CreateService
+  request:
+    '@type': type.googleapis.com/google.cloud.run.v1.CreateServiceRequest
+    dryRun: all
+    parent: namespaces/aga-poc
+    service:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      metadata:
+        annotations:
+          run.googleapis.com/client-name: gcloud
+          run.googleapis.com/client-version: 551.0.0
+        name: service-b
+        namespace: aga-poc
+      spec:
+        template:
+          metadata:
+            annotations:
+              autoscaling.knative.dev/maxScale: '5'
+              run.googleapis.com/client-name: gcloud
+              run.googleapis.com/client-version: 551.0.0
+              run.googleapis.com/startup-cpu-boost: 'True'
+            labels:
+              client.knative.dev/nonce: tetdbahuxc
+          spec:
+            containers:
+            - image: asia-northeast1-docker.pkg.dev/aga-poc/cloud-run-source-deploy/service-b
+              name: ''
+      status: {}
+  requestMetadata:
+    callerIp: 2404:7a81:2161:cb00:b467:577:324a:b6bc
+    callerSuppliedUserAgent: google-cloud-sdk gcloud/551.0.0 command/gcloud.run.deploy
+      invocation-id/276a1adb53784f2593e3e13faab8b4bd environment/None environment-version/None
+      client-os/MACOSX client-os-ver/23.6.0 client-pltf-arch/arm interactive/True
+      from-script/False python/3.13.11 term/xterm-256color  (Macintosh; Intel Mac
+      OS X 23.6.0),gzip(gfe)
+    destinationAttributes: {}
+    requestAttributes:
+      auth: {}
+      time: '2026-01-10T20:31:34.630302Z'
+  resourceLocation:
+    currentLocations:
+    - asia-northeast1
+  resourceName: namespaces/aga-poc/services/service-b
+  serviceName: run.googleapis.com
+receiveTimestamp: '2026-01-10T20:31:35.269889610Z'
+resource:
+  labels:
+    configuration_name: ''
+    location: asia-northeast1
+    project_id: aga-poc
+    revision_name: ''
+    service_name: service-b
+  type: cloud_run_revision
+severity: NOTICE
+timestamp: '2026-01-10T20:31:34.258649Z'
