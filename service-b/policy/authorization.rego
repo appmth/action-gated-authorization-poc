@@ -10,7 +10,6 @@ allow if {
   input.action == "get_resident_info"
   input.context.purpose == "inquiry"
   input.context.time == "business_hours"
-  input.context.data_sensitivity == "required"
 }
 
 # Deny の理由（順番が大事：より具体的なものを上に）

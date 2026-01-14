@@ -495,7 +495,7 @@ async def plan_and_act(request: PlanRequest):
     1. ユーザーリクエストを受け取る
     2. Vertex AI で Plan を生成
     3. Plan を厳格にバリデーション（Fail Closed）
-    4. レスポンスを返す（実行はこのPoCでは行わない）
+    4. 各アクションを PDP で判定し、allow なら実行（Strict Mode）
     """
     request_id = str(uuid.uuid4())
 
@@ -517,61 +517,231 @@ async def plan_and_act(request: PlanRequest):
         )
 
     except VertexAIError as e:
+        error_message = str(e)[:200]
         log_event(
             phase="plan_failed",
             request_id=request_id,
             error_type="vertex_ai_config_error",
+            reason=error_message,
         )
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "request_id": request_id,
-                "error": str(e),
-            },
-        )
+        # Fail Closed: actions=[] として返す
+        return {
+            "request_id": request_id,
+            "plan": {"actions_count": 0},
+            "per_action_results": [],
+            "final_status": "blocked",
+            "error": {
+                "type": "plan_generation_failed",
+                "message": "Vertex AI configuration error"
+            }
+        }
     except httpx.HTTPStatusError as e:
         error_body = e.response.text[:500] if e.response else "no body"
+        error_message = f"{e.response.status_code}: {error_body[:100]}"
         log_event(
             phase="plan_failed",
             request_id=request_id,
             error_type="vertex_ai_http_error",
-            reason=f"{e.response.status_code}: {error_body}",
+            reason=error_message,
         )
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "request_id": request_id,
-                "error": f"Vertex AI error: {e.response.status_code}: {error_body}",
-            },
-        )
+        # Fail Closed: actions=[] として返す
+        return {
+            "request_id": request_id,
+            "plan": {"actions_count": 0},
+            "per_action_results": [],
+            "final_status": "blocked",
+            "error": {
+                "type": "plan_generation_failed",
+                "message": f"Vertex AI error: {e.response.status_code}"
+            }
+        }
     except Exception as e:
+        error_message = str(e)[:200]
         log_event(
             phase="plan_failed",
             request_id=request_id,
             error_type="vertex_ai_error",
-            reason=str(e),
+            reason=error_message,
         )
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "request_id": request_id,
-                "error": f"Failed to generate plan: {e}",
-            },
-        )
+        # Fail Closed: actions=[] として返す
+        return {
+            "request_id": request_id,
+            "plan": {"actions_count": 0},
+            "per_action_results": [],
+            "final_status": "blocked",
+            "error": {
+                "type": "plan_generation_failed",
+                "message": "Failed to generate plan"
+            }
+        }
 
     # Plan バリデーション（Fail Closed）
     validated_actions = validate_plan(plan_text)
+    dropped_count = 0  # TODO: 実際にドロップした数をカウント
 
     log_event(
         phase="plan_validated",
         request_id=request_id,
+        context={
+            "actions_count": len(validated_actions),
+            "dropped_actions_count": dropped_count,
+        },
     )
+
+    # validated_actions が空の場合は何もせずに返す
+    if not validated_actions:
+        return {
+            "request_id": request_id,
+            "plan": {
+                "actions_count": 0,
+            },
+            "per_action_results": [],
+            "final_status": "completed",
+        }
+
+    # 各アクションを1つずつ処理（Strict Mode: deny で即終了）
+    per_action_results = []
+    final_status = "completed"
+
+    for action_item in validated_actions:
+        action = action_item["action"]
+        context = action_item["context"]
+
+        # PDP に問い合わせ
+        pdp_start = time.perf_counter()
+        try:
+            decision = await call_pdp(action, context)
+            pdp_latency_ms = (time.perf_counter() - pdp_start) * 1000
+            decision_dict = {"allow": decision.allow, "reason": decision.reason}
+
+            log_event(
+                phase="policy_check",
+                request_id=request_id,
+                action=action,
+                context=context,
+                decision=decision_dict,
+                latency_ms=pdp_latency_ms,
+            )
+
+        except PDPError as e:
+            pdp_latency_ms = (time.perf_counter() - pdp_start) * 1000
+            decision_dict = {"allow": False, "reason": str(e)}
+
+            log_event(
+                phase="policy_check",
+                request_id=request_id,
+                action=action,
+                context=context,
+                decision=decision_dict,
+                latency_ms=pdp_latency_ms,
+            )
+
+            # PDP 障害時は blocked として即終了
+            log_event(
+                phase="blocked",
+                request_id=request_id,
+                action=action,
+                reason=str(e),
+            )
+
+            # HTTPException 503 で返す
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "request_id": request_id,
+                    "action": action,
+                    "allowed": False,
+                    "reason": str(e),
+                    "message": "Policy engine unavailable"
+                },
+            )
+
+        # Deny の場合は blocked として即終了（Strict Mode）
+        if not decision.allow:
+            log_event(
+                phase="blocked",
+                request_id=request_id,
+                action=action,
+                reason=decision.reason,
+            )
+
+            per_action_results.append({
+                "action": action,
+                "decision": decision_dict,
+                "tool_result": None,
+            })
+            final_status = "blocked"
+            break
+
+        # Allow の場合: Tool 呼び出し
+        idempotency_key = generate_idempotency_key(request_id, action)
+        tool_endpoint = f"{TOOL_URL}/execute"
+
+        log_event(
+            phase="tool_call_started",
+            request_id=request_id,
+            action=action,
+            tool={
+                "endpoint": tool_endpoint,
+                "method": "POST",
+            },
+            idempotency_key=idempotency_key,
+        )
+
+        # Tool 呼び出し
+        tool_result = await call_tool(request_id, action, context, idempotency_key)
+        outcome = "success" if tool_result.ok else "error"
+
+        tool_finished_log = {
+            "endpoint": tool_result.endpoint,
+            "status_code": tool_result.status_code,
+            "latency_ms": round(tool_result.latency_ms, 2),
+        }
+        log_kwargs = {
+            "phase": "tool_call_finished",
+            "request_id": request_id,
+            "action": action,
+            "tool": tool_finished_log,
+            "outcome": outcome,
+        }
+        if tool_result.error_type:
+            log_kwargs["error_type"] = tool_result.error_type
+        log_event(**log_kwargs)
+
+        # Tool 失敗時は 502 で即終了
+        if not tool_result.ok:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "request_id": request_id,
+                    "action": action,
+                    "allowed": True,  # 重要: decision.allow=true のまま
+                    "reason": decision.reason,
+                    "outcome": "error",
+                    "error_type": tool_result.error_type,
+                    "message": f"Tool execution failed: {tool_result.error_type}"
+                },
+            )
+
+        # 成功時のみ結果を記録
+        per_action_results.append({
+            "action": action,
+            "decision": decision_dict,
+            "tool_result": {
+                "status_code": tool_result.status_code,
+                "latency_ms": round(tool_result.latency_ms, 2),
+                "outcome": outcome,
+                "error_type": None,
+            },
+        })
 
     return {
         "request_id": request_id,
         "plan": {
-            "actions": validated_actions,
+            "actions_count": len(validated_actions),
         },
+        "per_action_results": per_action_results,
+        "final_status": final_status,
     }
 
 
