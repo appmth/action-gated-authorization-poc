@@ -111,9 +111,27 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8080
 
 **重要**: service-b（OPA）が起動していないと、service-a は 503 エラーを返します。
 
+#### service-a エンドポイント一覧
+
+| エンドポイント | 用途 | リクエスト形式 |
+|---------------|------|---------------|
+| `POST /v1/actions/get_resident_info` | 直接 Action 実行 | `{ "context": {...} }` |
+| `POST /v1/agent/plan-and-act` | Agent Plan 生成→実行 | `{ "request": "自然言語" }` |
+| `GET /judgments` | Judgment 一覧取得 | - |
+| `GET /judgments/{request_id}` | Judgment 詳細取得 | - |
+
+#### 現在のポリシー（service-b）
+
+| purpose | time | 結果 |
+|---------|------|------|
+| `inquiry` | `business_hours` | **Allow** |
+| それ以外 | - | Deny |
+
+#### テストコマンド
+
 ```bash
 # Allow パターン（purpose=inquiry, time=business_hours）
-curl -X POST http://localhost:8080/v1/actions/get_resident_info \
+curl -sS -X POST http://localhost:8080/v1/actions/get_resident_info \
   -H "Content-Type: application/json" \
   -d '{
     "context": {
@@ -121,10 +139,10 @@ curl -X POST http://localhost:8080/v1/actions/get_resident_info \
       "time": "business_hours",
       "data_sensitivity": "required"
     }
-  }'
+  }' | jq
 
 # Deny パターン（purpose=marketing は許可されない）
-curl -X POST http://localhost:8080/v1/actions/get_resident_info \
+curl -sS -X POST http://localhost:8080/v1/actions/get_resident_info \
   -H "Content-Type: application/json" \
   -d '{
     "context": {
@@ -132,7 +150,21 @@ curl -X POST http://localhost:8080/v1/actions/get_resident_info \
       "time": "business_hours",
       "data_sensitivity": "required"
     }
-  }'
+  }' | jq
+
+# Deny パターン（業務時間外）
+curl -sS -X POST http://localhost:8080/v1/actions/get_resident_info \
+  -H "Content-Type: application/json" \
+  -d '{
+    "context": {
+      "purpose": "inquiry",
+      "time": "after_hours",
+      "data_sensitivity": "required"
+    }
+  }' | jq
+
+# Judgment 一覧取得
+curl -sS http://localhost:8080/judgments | jq
 ```
 
 ### 4. service-c（Tool mock）を起動（オプション）
