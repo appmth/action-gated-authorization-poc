@@ -1,20 +1,32 @@
 import Link from 'next/link';
+import { getJudgment } from '@/lib/api';
 import { JudgmentDetail, TraceStep } from '@/lib/types';
+
 type Props = {
-    params: Promise<{ request_id: string}>;
+    params: Promise<{ request_id: string }>;
 };
 
 export default async function JudgmentDetailPage({ params }: Props) {
   const { request_id } = await params;
 
-  // PoC 初期段階: モックデータを使用
-  const judgment = getMockJudgment(request_id);
+  // API から Judgment 詳細を取得
+  let judgment: JudgmentDetail | null = null;
+  let error: string | null = null;
 
-  if (!judgment) {
+  try {
+    judgment = await getJudgment(request_id);
+  } catch (e) {
+    error = e instanceof Error ? e.message : "Failed to fetch judgment";
+  }
+
+  if (error || !judgment) {
     return (
       <main className="p-8">
         <p className="text-red-600">Judgment not found: {request_id}</p>
-        <Link href="/dashboard" className="text-blue-600 hover:underline">
+        {error && (
+          <p className="text-sm text-gray-500 mt-2">{error}</p>
+        )}
+        <Link href="/dashboard" className="text-blue-600 hover:underline mt-4 inline-block">
           Back to Dashboard
         </Link>
       </main>
@@ -241,105 +253,3 @@ function TraceStepRow({ step }: { step: TraceStep }) {
   );
 }
 
-/** モックデータ */
-function getMockJudgment(requestId: string): JudgmentDetail | null {
-  const now = new Date();
-
-  // DENY のモック
-  if (requestId.startsWith('a') || requestId === 'deny-demo') {
-    return {
-      request_id: requestId,
-      created_at: now.toISOString(),
-      action: 'get_resident_info',
-      context: {
-        purpose: 'inquiry',
-        time: 'after_hours',
-        data_sensitivity: 'required',
-      },
-      decision: {
-        allow: false,
-        reason:
-          'After-hours access with inquiry purpose is not permitted. Emergency or audit purpose is required for after-hours data access.',
-      },
-      reason_short: 'After-hours access requires emergency purpose',
-      policy_version: '1.0.0',
-      rule_id: 'after_hours_check',
-      pep_enforcement: {
-        pdp_called: true,
-        tool_called: false,
-        side_effects: 'none',
-      },
-      trace: [
-        { step: 'Request Received', at: now.toISOString(), status: 'completed' },
-        {
-          step: 'PDP Consulted',
-          at: new Date(now.getTime() + 50).toISOString(),
-          status: 'completed',
-          note: 'Policy evaluated',
-        },
-        {
-          step: 'Decision: DENY',
-          at: new Date(now.getTime() + 55).toISOString(),
-          status: 'blocked',
-          note: 'After-hours + inquiry',
-        },
-        {
-          step: 'Tool Execution',
-          at: new Date(now.getTime() + 56).toISOString(),
-          status: 'skipped',
-          note: 'Not called due to DENY',
-        },
-      ],
-    };
-  }
-
-  // ALLOW のモック
-  return {
-    request_id: requestId,
-    created_at: now.toISOString(),
-    action: 'get_resident_info',
-    context: {
-      purpose: 'emergency',
-      time: 'after_hours',
-      data_sensitivity: 'required',
-    },
-    decision: {
-      allow: true,
-      reason: 'Emergency access is permitted regardless of time.',
-    },
-    reason_short: 'Emergency access granted',
-    policy_version: '1.0.0',
-    rule_id: 'emergency_override',
-    pep_enforcement: {
-      pdp_called: true,
-      tool_called: true,
-      side_effects: 'none',
-    },
-    tool_result: {
-      status_code: 200,
-      latency_ms: 45.23,
-      data: { resident_info: 'dummy data' },
-    },
-    trace: [
-      { step: 'Request Received', at: now.toISOString(), status: 'completed' },
-      {
-        step: 'PDP Consulted',
-        at: new Date(now.getTime() + 50).toISOString(),
-        status: 'completed',
-        note: 'Policy evaluated',
-      },
-      {
-        step: 'Decision: ALLOW',
-        at: new Date(now.getTime() + 55).toISOString(),
-        status: 'completed',
-        note: 'Emergency override',
-      },
-      {
-        step: 'Tool Execution',
-        at: new Date(now.getTime() + 100).toISOString(),
-        status: 'completed',
-        note: 'Tool called successfully',
-      },
-    ],
-  };
-}

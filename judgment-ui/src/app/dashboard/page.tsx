@@ -1,9 +1,34 @@
 import Link from "next/link"
-import { getJudgment, getJudgments } from "@/lib/api"
+import { getJudgments } from "@/lib/api"
 import type { JudgmentSummary } from "@/lib/types"
 
-export default function DashboardPage() {
-    const judgments: JudgmentSummary[] = getMockJudgments();
+export default async function DashboardPage() {
+    // API から Judgment 一覧を取得
+    let judgments: JudgmentSummary[] = [];
+    let error: string | null = null;
+
+    try {
+        judgments = await getJudgments();
+    } catch (e) {
+        error = e instanceof Error ? e.message : "Failed to fetch judgments";
+    }
+
+  // エラー時の表示
+  if (error) {
+    return (
+      <main className="p-8">
+        <h1 className="text-2xl font-bold mb-6">Judgment Dashboard</h1>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-yellow-800">
+            API に接続できません: {error}
+          </p>
+          <p className="text-sm text-yellow-600 mt-2">
+            service-a が起動しているか確認してください（port 8080）
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="p-8">
@@ -95,30 +120,4 @@ export default function DashboardPage() {
     });
     }
 
-    /** モックデータ（Phase 3 で API に切り替え） */
-    function getMockJudgments(): JudgmentSummary[] {
-    return [
-        {
-        request_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        action: 'get_resident_info',
-        result: 'DENY',
-        reason_short: 'After-hours access requires emergency purpose',
-        created_at: new Date().toISOString(),
-        },
-        {
-        request_id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
-        action: 'get_resident_info',
-        result: 'ALLOW',
-        reason_short: 'Emergency access granted',
-        created_at: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-        request_id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
-        action: 'get_resident_info',
-        result: 'DENY',
-        reason_short: 'Inquiry purpose not permitted after hours',
-        created_at: new Date(Date.now() - 7200000).toISOString(),
-        },
-    ];
-    }
 }
