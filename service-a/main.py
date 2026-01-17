@@ -3,12 +3,15 @@ import json
 import os
 import time
 import uuid
+from collections import deque
+from datetime import datetime
 
 import google.auth
 import google.auth.transport.requests
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 
@@ -88,6 +91,44 @@ class PDPResponse(BaseModel):
 
 
 app = FastAPI()
+
+# CORS 設定（judgment-ui からのアクセスを許可）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Next.js dev server
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# インメモリストア（最新100件を保持）
+judgment_store: deque[dict] = deque(maxlen=100)
+
+
+def store_judgment(
+    request_id: str,
+    action: str,
+    context: dict,
+    decision: dict,
+    pep_enforcement: dict,
+    tool_result: dict | None = None,
+    trace: list[dict] | None = None,
+):
+    """Judgment をインメモリに保存"""
+    judgment = {
+        "request_id": request_id,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "action": action,
+        "context": context,
+        "decision": decision,
+        "reason_short": decision.get("reason", "")[:80],
+        "policy_version": "1.0.0",  # PoC では固定
+        "pep_enforcement": pep_enforcement,
+        "tool_result": tool_result,
+        "trace": trace or [],
+    }
+    judgment_store.appendleft(judgment)
+    return judgment
 
 
 class PDPError(Exception):
@@ -340,6 +381,31 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/judgments")
+def list_judgments(limit: int = 20):
+    """Judgment 一覧を取得"""
+    items = list(judgment_store)[:limit]
+    return [
+        {
+            "request_id": j["request_id"],
+            "action": j["action"],
+            "result": "ALLOW" if j["decision"]["allow"] else "DENY",
+            "reason_short": j["reason_short"],
+            "created_at": j["created_at"],
+        }
+        for j in items
+    ]
+
+
+@app.get("/judgments/{request_id}")
+def get_judgment(request_id: str):
+    """Judgment 詳細を取得"""
+    for j in judgment_store:
+        if j["request_id"] == request_id:
+            return j
+    raise HTTPException(status_code=404, detail="Judgment not found")
+
+
 @app.post("/v1/actions/get_resident_info")
 async def get_resident_info(request: ActionRequest):
     """
@@ -419,6 +485,27 @@ async def get_resident_info(request: ActionRequest):
             reason=decision.reason,
         )
 
+        # Judgment を保存（DENY）
+        now = datetime.utcnow().isoformat() + "Z"
+        store_judgment(
+            request_id=request_id,
+            action=action,
+            context=context,
+            decision=decision_dict,
+            pep_enforcement={
+                "pdp_called": True,
+                "tool_called": False,
+                "side_effects": "none",
+            },
+            tool_result=None,
+            trace=[
+                {"step": "Request Received", "at": now, "status": "completed"},
+                {"step": "PDP Consulted", "at": now, "status": "completed", "note": "Policy evaluated"},
+                {"step": "Decision: DENY", "at": now, "status": "blocked", "note": decision.reason[:50]},
+                {"step": "Tool Execution", "at": now, "status": "skipped", "note": "Not called due to DENY"},
+            ],
+        )
+
         raise HTTPException(
             status_code=403,
             detail={
@@ -477,6 +564,30 @@ async def get_resident_info(request: ActionRequest):
                 "error_type": tool_result.error_type,
             },
         )
+
+    # Judgment を保存（ALLOW）
+    now = datetime.utcnow().isoformat() + "Z"
+    store_judgment(
+        request_id=request_id,
+        action=action,
+        context=context,
+        decision=decision_dict,
+        pep_enforcement={
+            "pdp_called": True,
+            "tool_called": True,
+            "side_effects": "none",
+        },
+        tool_result={
+            "status_code": tool_result.status_code,
+            "latency_ms": round(tool_result.latency_ms, 2),
+        },
+        trace=[
+            {"step": "Request Received", "at": now, "status": "completed"},
+            {"step": "PDP Consulted", "at": now, "status": "completed", "note": "Policy evaluated"},
+            {"step": "Decision: ALLOW", "at": now, "status": "completed", "note": decision.reason[:50]},
+            {"step": "Tool Execution", "at": now, "status": "completed", "note": "Tool called successfully"},
+        ],
+    )
 
     return {
         "request_id": request_id,
@@ -665,6 +776,27 @@ async def plan_and_act(request: PlanRequest):
                 reason=decision.reason,
             )
 
+            # Judgment を保存（DENY）
+            now = datetime.utcnow().isoformat() + "Z"
+            store_judgment(
+                request_id=request_id,
+                action=action,
+                context=context,
+                decision=decision_dict,
+                pep_enforcement={
+                    "pdp_called": True,
+                    "tool_called": False,
+                    "side_effects": "none",
+                },
+                tool_result=None,
+                trace=[
+                    {"step": "Request Received", "at": now, "status": "completed"},
+                    {"step": "PDP Consulted", "at": now, "status": "completed", "note": "Policy evaluated"},
+                    {"step": "Decision: DENY", "at": now, "status": "blocked", "note": decision.reason[:50]},
+                    {"step": "Tool Execution", "at": now, "status": "skipped", "note": "Not called due to DENY"},
+                ],
+            )
+
             per_action_results.append({
                 "action": action,
                 "decision": decision_dict,
@@ -722,6 +854,30 @@ async def plan_and_act(request: PlanRequest):
                     "message": f"Tool execution failed: {tool_result.error_type}"
                 },
             )
+
+        # Judgment を保存（ALLOW）
+        now = datetime.utcnow().isoformat() + "Z"
+        store_judgment(
+            request_id=request_id,
+            action=action,
+            context=context,
+            decision=decision_dict,
+            pep_enforcement={
+                "pdp_called": True,
+                "tool_called": True,
+                "side_effects": "none",
+            },
+            tool_result={
+                "status_code": tool_result.status_code,
+                "latency_ms": round(tool_result.latency_ms, 2),
+            },
+            trace=[
+                {"step": "Request Received", "at": now, "status": "completed"},
+                {"step": "PDP Consulted", "at": now, "status": "completed", "note": "Policy evaluated"},
+                {"step": "Decision: ALLOW", "at": now, "status": "completed", "note": decision.reason[:50]},
+                {"step": "Tool Execution", "at": now, "status": "completed", "note": "Tool called successfully"},
+            ],
+        )
 
         # 成功時のみ結果を記録
         per_action_results.append({
