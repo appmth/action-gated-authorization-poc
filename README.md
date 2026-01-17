@@ -258,16 +258,15 @@ gcloud run deploy service-a \
 
 ### 4. judgment-ui（Next.js）をデプロイ
 
-service-a のURLを環境変数に設定します。
-
 ```bash
 cd judgment-ui
 gcloud run deploy judgment-ui \
   --source . \
-  --region asia-northeast1 \
   --allow-unauthenticated \
   --set-env-vars NEXT_PUBLIC_API_URL=https://service-a-XXXXXX.asia-northeast1.run.app
 ```
+
+> **Note**: `package.json` の `start` スクリプトで `PORT` 環境変数を使用するため、Dockerfile不要でソースからデプロイ可能。
 
 ### オプション説明
 
