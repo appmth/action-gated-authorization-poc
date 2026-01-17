@@ -208,10 +208,11 @@ docker run --rm -p 8181:8080 --name aga-pdp aga-pdp:local
 
 ## Deploy to Cloud Run
 
-各サービスをCloud Runにデプロイするには、サービスのディレクトリに移動して以下のコマンドを実行します。
+各サービスをCloud Runにデプロイするには、以下の順序で実行します。
+
+### 1. service-b（OPA/PDP）をデプロイ
 
 ```bash
-# 1. service-b (OPA/PDP) を先にデプロイ
 cd service-b
 gcloud run deploy service-b \
   --source . \
@@ -220,8 +221,29 @@ gcloud run deploy service-b \
   --min-instances 0 \
   --max-instances 5 \
   --port 8080
+```
 
-# 2. service-a をデプロイ（PDP_URL に service-b のURLを設定）
+デプロイ後、出力されるURLをメモしておきます（例: `https://service-b-XXXXXX.asia-northeast1.run.app`）
+
+### 2. service-c（Tool mock）をデプロイ
+
+```bash
+cd service-c
+gcloud run deploy service-c \
+  --source . \
+  --region asia-northeast1 \
+  --allow-unauthenticated \
+  --min-instances 0 \
+  --max-instances 5
+```
+
+デプロイ後、出力されるURLをメモしておきます（例: `https://service-c-XXXXXX.asia-northeast1.run.app`）
+
+### 3. service-a（Agent + PEP）をデプロイ
+
+service-b と service-c のURLを環境変数に設定します。
+
+```bash
 cd service-a
 gcloud run deploy service-a \
   --source . \
@@ -229,19 +251,35 @@ gcloud run deploy service-a \
   --allow-unauthenticated \
   --min-instances 0 \
   --max-instances 5 \
-  --set-env-vars PDP_URL=https://service-b-XXXXXX.asia-northeast1.run.app
+  --set-env-vars PDP_URL=https://service-b-XXXXXX.asia-northeast1.run.app,TOOL_URL=https://service-c-XXXXXX.asia-northeast1.run.app
 ```
 
 > **Note**: `PDP_URL` にはベースURLのみを指定。パス (`/v1/data/authorization/decision`) はコード側で付与されます。
 
-**オプション説明：**
-- `--source .` : 現在のディレクトリからビルド
-- `--allow-unauthenticated` : 認証なしでアクセス可能（PoC用）
-- `--region asia-northeast1` : 東京リージョン
-- `--min-instances 0` : 最小インスタンス数（コスト最適化）
-- `--max-instances 5` : 最大インスタンス数
-- `--port 8080` : OPAがリッスンするポート
-- `--set-env-vars` : 環境変数を設定
+### 4. judgment-ui（Next.js）をデプロイ
+
+service-a のURLを環境変数に設定します。
+
+```bash
+cd judgment-ui
+gcloud run deploy judgment-ui \
+  --source . \
+  --region asia-northeast1 \
+  --allow-unauthenticated \
+  --set-env-vars NEXT_PUBLIC_API_URL=https://service-a-XXXXXX.asia-northeast1.run.app
+```
+
+### オプション説明
+
+| オプション | 説明 |
+|-----------|------|
+| `--source .` | 現在のディレクトリからビルド |
+| `--allow-unauthenticated` | 認証なしでアクセス可能（PoC用） |
+| `--region asia-northeast1` | 東京リージョン |
+| `--min-instances 0` | 最小インスタンス数（コスト最適化） |
+| `--max-instances 5` | 最大インスタンス数 |
+| `--port 8080` | OPAがリッスンするポート |
+| `--set-env-vars` | 環境変数を設定 |
 
 ## 動作確認
 
