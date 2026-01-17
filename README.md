@@ -357,7 +357,34 @@ curl -s -X POST "https://service-a-374053446416.asia-northeast1.run.app/v1/actio
     }
   }' | jq
 # => {"detail":{"request_id":"...","action":"get_resident_info","allowed":false,"reason":"Denied: purpose must be 'inquiry'"}}
+
+# Judgment 一覧取得
+curl -s "https://service-a-374053446416.asia-northeast1.run.app/judgments" | jq
+# => [{"request_id":"...","action":"get_resident_info","result":"ALLOW","reason_short":"...","created_at":"..."}]
 ```
+
+### service-c (Tool mock) のテスト
+
+```bash
+# ヘルスチェック
+curl -s "https://service-c-374053446416.asia-northeast1.run.app/health"
+# => {"status":"healthy"}
+```
+
+### judgment-ui のテスト
+
+```bash
+# ヘルスチェック（Next.js トップページ）
+curl -s -o /dev/null -w "%{http_code}" "https://judgment-ui-374053446416.asia-northeast1.run.app/"
+# => 200
+
+# ダッシュボードページ
+curl -s -o /dev/null -w "%{http_code}" "https://judgment-ui-374053446416.asia-northeast1.run.app/dashboard"
+# => 200
+```
+
+ブラウザで確認:
+- https://judgment-ui-374053446416.asia-northeast1.run.app/dashboard
 
 ## Policy Example
 ```yaml
