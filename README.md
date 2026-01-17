@@ -107,9 +107,36 @@ pip install -r requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8080
 ```
 
-### 3. 動作確認
+### 3. service-c（Tool mock）を起動
 
-**重要**: service-b（OPA）が起動していないと、service-a は 503 エラーを返します。
+Allow 時に Tool 呼び出しを成功させるため、service-c を起動します。
+
+```bash
+cd service-c
+
+# venv作成・有効化
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 依存関係インストール
+pip install -r requirements.txt
+
+# 起動
+uvicorn main:app --reload --host 0.0.0.0 --port 8082
+```
+
+service-c が起動したら確認:
+
+```bash
+curl http://localhost:8082/health
+# => {"status":"healthy"}
+```
+
+### 4. 動作確認
+
+**重要**:
+- service-b（OPA）が起動していないと、service-a は 503 エラーを返します
+- service-c（Tool mock）が起動していないと、Allow 時に Tool 呼び出しが失敗します
 
 #### service-a エンドポイント一覧
 
@@ -165,24 +192,6 @@ curl -sS -X POST http://localhost:8080/v1/actions/get_resident_info \
 
 # Judgment 一覧取得
 curl -sS http://localhost:8080/judgments | jq
-```
-
-### 4. service-c（Tool mock）を起動（オプション）
-
-Allow 時に Tool 呼び出しを成功させる場合は service-c も起動:
-
-```bash
-cd service-c
-
-# venv作成・有効化
-python3 -m venv .venv
-source .venv/bin/activate
-
-# 依存関係インストール
-pip install -r requirements.txt
-
-# 起動
-uvicorn main:app --reload --host 0.0.0.0 --port 8082
 ```
 
 ### Docker を使う場合 (OPA/PDP)
