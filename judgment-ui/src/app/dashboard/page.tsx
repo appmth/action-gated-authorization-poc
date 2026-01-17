@@ -1,6 +1,6 @@
 import Link from "next/link"
-import { getJudgment, getJudgments } from "@/app/lib/api"
-import type { JudgmentSummary } from "@/app/lib/types"
+import { getJudgment, getJudgments } from "@/lib/api"
+import type { JudgmentSummary } from "@/lib/types"
 
 export default function DashboardPage() {
     const judgments: JudgmentSummary[] = getMockJudgments();
