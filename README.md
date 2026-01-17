@@ -77,9 +77,9 @@ service-a は PDP（OPA）に認可判断を問い合わせるため、**先に 
 ```bash
 cd service-b
 
-# Docker を使う場合
+# Docker を使う場合（コンテナ内は8080、ホストは8181にマッピング）
 docker build -t aga-pdp:local .
-docker run --rm -p 8181:8181 --name aga-pdp aga-pdp:local
+docker run --rm -p 8181:8080 --name aga-pdp aga-pdp:local
 
 # または OPA を直接使う場合
 opa run --server --addr :8181 policy/
@@ -156,11 +156,13 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8082
 ### Docker を使う場合 (OPA/PDP)
 
 ```bash
+cd service-b
+
 # ビルド
 docker build -t aga-pdp:local .
 
-# 実行
-docker run --rm -p 8181:8181 --name aga-pdp aga-pdp:local
+# 実行（コンテナ内は8080、ホストは8181にマッピング）
+docker run --rm -p 8181:8080 --name aga-pdp aga-pdp:local
 ```
 
 ## Deploy to Cloud Run
