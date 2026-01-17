@@ -210,6 +210,15 @@ docker run --rm -p 8181:8080 --name aga-pdp aga-pdp:local
 
 各サービスをCloud Runにデプロイするには、以下の順序で実行します。
 
+## ドメイン対応表
+
+| ドメイン | Cloud Run サービス | リージョン |
+| --- | --- | --- |
+| `judgment-ui.action-gated.tech` | `judgment-ui` | `asia-northeast1` |
+| `service-a.action-gated.tech` | `service-a` | `asia-northeast1` |
+| `service-b.action-gated.tech` | `service-b` | `asia-northeast1` |
+| `service-c.action-gated.tech` | `service-c` | `asia-northeast1` |
+
 ### 1. service-b（OPA/PDP）をデプロイ
 
 ```bash
@@ -223,7 +232,7 @@ gcloud run deploy service-b \
   --port 8080
 ```
 
-デプロイ後、出力されるURLをメモしておきます（例: `https://service-b-XXXXXX.asia-northeast1.run.app`）
+デプロイ後、出力されるURLをメモしておきます（例: `https://service-b.action-gated.tech`）
 
 ### 2. service-c（Tool mock）をデプロイ
 
@@ -237,7 +246,7 @@ gcloud run deploy service-c \
   --max-instances 5
 ```
 
-デプロイ後、出力されるURLをメモしておきます（例: `https://service-c-XXXXXX.asia-northeast1.run.app`）
+デプロイ後、出力されるURLをメモしておきます（例: `https://service-c.action-gated.tech`）
 
 ### 3. service-a（Agent + PEP）をデプロイ
 
@@ -251,7 +260,7 @@ gcloud run deploy service-a \
   --allow-unauthenticated \
   --min-instances 0 \
   --max-instances 5 \
-  --set-env-vars PDP_URL=https://service-b-XXXXXX.asia-northeast1.run.app,TOOL_URL=https://service-c-XXXXXX.asia-northeast1.run.app
+  --set-env-vars PDP_URL=https://service-b.action-gated.tech,TOOL_URL=https://service-c.action-gated.tech
 ```
 
 > **Note**: `PDP_URL` にはベースURLのみを指定。パス (`/v1/data/authorization/decision`) はコード側で付与されます。
@@ -263,7 +272,7 @@ cd judgment-ui
 gcloud run deploy judgment-ui \
   --source . \
   --allow-unauthenticated \
-  --set-env-vars NEXT_PUBLIC_API_URL=https://service-a-XXXXXX.asia-northeast1.run.app
+  --set-env-vars NEXT_PUBLIC_API_URL=https://service-a.action-gated.tech
 ```
 
 > **Note**: `package.json` の `start` スクリプトで `PORT` 環境変数を使用するため、Dockerfile不要でソースからデプロイ可能。
@@ -286,7 +295,7 @@ gcloud run deploy judgment-ui \
 
 ```bash
 # Allow ケース: inquiry + business_hours + data_sensitivity=required
-curl -s -X POST "https://service-b-374053446416.asia-northeast1.run.app/v1/data/authorization/decision" \
+curl -s -X POST "https://service-b.action-gated.tech/v1/data/authorization/decision" \
   -H "Content-Type: application/json" \
   -d '{
     "input": {
@@ -301,7 +310,7 @@ curl -s -X POST "https://service-b-374053446416.asia-northeast1.run.app/v1/data/
 # => {"result":{"allow":true,"reason":"Allowed: inquiry during business hours"}}
 
 # Deny ケース: purpose が inquiry 以外
-curl -s -X POST "https://service-b-374053446416.asia-northeast1.run.app/v1/data/authorization/decision" \
+curl -s -X POST "https://service-b.action-gated.tech/v1/data/authorization/decision" \
   -H "Content-Type: application/json" \
   -d '{
     "input": {
@@ -316,7 +325,7 @@ curl -s -X POST "https://service-b-374053446416.asia-northeast1.run.app/v1/data/
 # => {"result":{"allow":false,"reason":"Denied: purpose must be 'inquiry'"}}
 
 # Deny ケース: 業務時間外
-curl -s -X POST "https://service-b-374053446416.asia-northeast1.run.app/v1/data/authorization/decision" \
+curl -s -X POST "https://service-b.action-gated.tech/v1/data/authorization/decision" \
   -H "Content-Type: application/json" \
   -d '{
     "input": {
@@ -335,7 +344,7 @@ curl -s -X POST "https://service-b-374053446416.asia-northeast1.run.app/v1/data/
 
 ```bash
 # Allow ケース
-curl -s -X POST "https://service-a-374053446416.asia-northeast1.run.app/v1/actions/get_resident_info" \
+curl -s -X POST "https://service-a.action-gated.tech/v1/actions/get_resident_info" \
   -H "Content-Type: application/json" \
   -d '{
     "context": {
@@ -347,7 +356,7 @@ curl -s -X POST "https://service-a-374053446416.asia-northeast1.run.app/v1/actio
 # => {"request_id":"...","action":"get_resident_info","allowed":true,"reason":"Allowed: inquiry during business hours","data":{...}}
 
 # Deny ケース
-curl -s -X POST "https://service-a-374053446416.asia-northeast1.run.app/v1/actions/get_resident_info" \
+curl -s -X POST "https://service-a.action-gated.tech/v1/actions/get_resident_info" \
   -H "Content-Type: application/json" \
   -d '{
     "context": {
@@ -359,7 +368,7 @@ curl -s -X POST "https://service-a-374053446416.asia-northeast1.run.app/v1/actio
 # => {"detail":{"request_id":"...","action":"get_resident_info","allowed":false,"reason":"Denied: purpose must be 'inquiry'"}}
 
 # Judgment 一覧取得
-curl -s "https://service-a-374053446416.asia-northeast1.run.app/judgments" | jq
+curl -s "https://service-a.action-gated.tech/judgments" | jq
 # => [{"request_id":"...","action":"get_resident_info","result":"ALLOW","reason_short":"...","created_at":"..."}]
 ```
 
@@ -367,7 +376,7 @@ curl -s "https://service-a-374053446416.asia-northeast1.run.app/judgments" | jq
 
 ```bash
 # ヘルスチェック
-curl -s "https://service-c-374053446416.asia-northeast1.run.app/health"
+curl -s "https://service-c.action-gated.tech/health"
 # => {"status":"healthy"}
 ```
 
@@ -375,16 +384,16 @@ curl -s "https://service-c-374053446416.asia-northeast1.run.app/health"
 
 ```bash
 # ヘルスチェック（Next.js トップページ）
-curl -s -o /dev/null -w "%{http_code}" "https://judgment-ui-374053446416.asia-northeast1.run.app/"
+curl -s -o /dev/null -w "%{http_code}" "https://judgment-ui.action-gated.tech/"
 # => 200
 
 # ダッシュボードページ
-curl -s -o /dev/null -w "%{http_code}" "https://judgment-ui-374053446416.asia-northeast1.run.app/dashboard"
+curl -s -o /dev/null -w "%{http_code}" "https://judgment-ui.action-gated.tech/dashboard"
 # => 200
 ```
 
 ブラウザで確認:
-- https://judgment-ui-374053446416.asia-northeast1.run.app/dashboard
+- https://judgment-ui.action-gated.tech/dashboard
 
 ## Policy Example
 ```yaml

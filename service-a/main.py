@@ -67,7 +67,7 @@ TOOL_URL = os.getenv("TOOL_URL", "http://localhost:8082")
 
 # Vertex AI settings
 VERTEX_PROJECT = os.getenv("VERTEX_PROJECT", "")
-VERTEX_LOCATION = os.getenv("VERTEX_LOCATION", "us-central1")
+VERTEX_LOCATION = os.getenv("VERTEX_LOCATION", "asia-northeast1")
 VERTEX_MODEL = os.getenv("VERTEX_MODEL", "gemini-2.0-flash")
 
 # Allowed action / context keys for validation
