@@ -70,7 +70,28 @@ npm run dev
 - http://localhost:3000 でアクセス
 - 詳細は `docs/01-plan/03-nextjs-catchup-guide.md` を参照
 
-### uvicorn を使う場合 (service-a)
+### 1. service-b（OPA/PDP）を起動
+
+service-a は PDP（OPA）に認可判断を問い合わせるため、**先に service-b を起動する必要があります**。
+
+```bash
+cd service-b
+
+# Docker を使う場合
+docker build -t aga-pdp:local .
+docker run --rm -p 8181:8181 --name aga-pdp aga-pdp:local
+
+# または OPA を直接使う場合
+opa run --server --addr :8181 policy/
+```
+
+OPA が起動したら確認:
+
+```bash
+curl http://localhost:8181/health
+```
+
+### 2. service-a（Agent + PEP）を起動
 
 ```bash
 cd service-a
@@ -86,10 +107,12 @@ pip install -r requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8080
 ```
 
-サーバーが起動したら、別ターミナルで動作確認:
+### 3. 動作確認
+
+**重要**: service-b（OPA）が起動していないと、service-a は 503 エラーを返します。
 
 ```bash
-# Allow パターン
+# Allow パターン（purpose=inquiry, time=business_hours）
 curl -X POST http://localhost:8080/v1/actions/get_resident_info \
   -H "Content-Type: application/json" \
   -d '{
@@ -100,7 +123,7 @@ curl -X POST http://localhost:8080/v1/actions/get_resident_info \
     }
   }'
 
-# Deny パターン
+# Deny パターン（purpose=marketing は許可されない）
 curl -X POST http://localhost:8080/v1/actions/get_resident_info \
   -H "Content-Type: application/json" \
   -d '{
@@ -110,6 +133,24 @@ curl -X POST http://localhost:8080/v1/actions/get_resident_info \
       "data_sensitivity": "required"
     }
   }'
+```
+
+### 4. service-c（Tool mock）を起動（オプション）
+
+Allow 時に Tool 呼び出しを成功させる場合は service-c も起動:
+
+```bash
+cd service-c
+
+# venv作成・有効化
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 依存関係インストール
+pip install -r requirements.txt
+
+# 起動
+uvicorn main:app --reload --host 0.0.0.0 --port 8082
 ```
 
 ### Docker を使う場合 (OPA/PDP)
