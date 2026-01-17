@@ -16,20 +16,22 @@ AI Agent の Action を実行直前で必ず評価・制御する
 
 ```
 action-gated-authorization-poc/
-├── agent/          # AI Agent implementation
-├── pep/            # Policy Enforcement Point
-├── pdp/            # Policy Decision Point
-├── policy/         # Policy definitions
+├── service-a/      # Agent + PEP（FastAPI）
+├── service-b/      # PDP（OPA）
+├── service-c/      # Tool mock / sandbox
+├── judgment-ui/    # Judgment UI（Next.js App Router）
+│   ├── src/
+│   │   ├── app/    # App Router routes
+│   │   ├── components/
+│   │   └── lib/
+│   ├── public/
+│   └── package.json
 ├── infra/          # Infrastructure setup
 ├── logs/           # Execution logs
 ├── demo/           # Demo scenarios and examples
 ├── diagrams/       # Architecture diagrams
-├── docs/           # Documentation
-│   ├── 01-plan/
-│   ├── 02-slides/
-│   ├── 03-images/
-│   └── 99-gpt-memo/
-└── slides/         # Presentation materials
+└── docs/           # Documentation
+    └── 01-plan/    # Implementation plans & guides
 ```
 
 ## Demo (30 seconds)
@@ -49,6 +51,24 @@ action-gated-authorization-poc/
 4. Decision & reason are logged
 
 ## Local Development
+
+### Judgment UI (Next.js)
+
+```bash
+cd judgment-ui
+
+# 初回のみ: Next.js プロジェクトを初期化
+npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"
+
+# 環境変数を設定
+cp .env.local.example .env.local
+
+# 開発サーバー起動
+npm run dev
+```
+
+- http://localhost:3000 でアクセス
+- 詳細は `docs/01-plan/03-nextjs-catchup-guide.md` を参照
 
 ### uvicorn を使う場合 (service-a)
 
