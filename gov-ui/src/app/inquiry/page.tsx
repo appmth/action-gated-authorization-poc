@@ -103,16 +103,14 @@ export default function InquiryPage() {
 
         {response && (
           <div
-            className={`px-3 py-1 rounded-full text-sm inline-flex items-center gap-2 ${
-              response.allowed
+            className={`px-3 py-1 rounded-full text-sm inline-flex items-center gap-2 ${response.allowed
                 ? "bg-green-100 text-green-700"
                 : "bg-red-100 text-red-700"
-            }`}
+              }`}
           >
             <span
-              className={`w-2 h-2 rounded-full ${
-                response.allowed ? "bg-green-500" : "bg-red-500"
-              }`}
+              className={`w-2 h-2 rounded-full ${response.allowed ? "bg-green-500" : "bg-red-500"
+                }`}
             ></span>
             {response.allowed ? "処理完了" : "処理拒否"}
           </div>

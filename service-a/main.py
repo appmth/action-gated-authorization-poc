@@ -92,10 +92,15 @@ class PDPResponse(BaseModel):
 
 app = FastAPI()
 
-# CORS 設定（judgment-ui からのアクセスを許可）
+# CORS 設定（judgment-ui / gov-ui からのアクセスを許可）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Next.js dev server
+    allow_origins=[
+        "http://localhost:3000",  # judgment-ui dev server
+        "http://localhost:3001",  # gov-ui dev server
+        "https://judgment-ui.action-gated.tech",
+        "https://gov-ui.action-gated.tech",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

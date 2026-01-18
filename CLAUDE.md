@@ -56,6 +56,23 @@
 
 ---
 
+## Playwright Testing Rules
+- **Execution Directory**: Always run playwright commands from the `judgment-ui` directory.
+- **Headless Mode Required**: Use `npx playwright test` (headless) only. Never use `--ui`, `--headed`, or `codegen` as they will fail in this WSL environment due to XServer absence.
+- **Project Filter**: Use `--project=chromium` to speed up tests unless cross-browser testing is specifically requested.
+- **Environment**: Ensure the local development server is running at `http://localhost:3000` before executing tests. If not, suggest starting it with `npm run dev`.
+- **Test File Location**: All new tests must be created in `judgment-ui/tests/`.
+- **Debugging**: If a test fails, do not attempt to open a browser. Instead:
+    1. Read the terminal error output.
+    2. Check the `playwright-report/` or `test-results/` directory if available.
+    3. Use `console.log` inside tests to debug state if needed.
+- **Command Snippets**:
+    - Run all tests: `cd judgment-ui && npx playwright test`
+    - Run specific test: `cd judgment-ui && npx playwright test tests/example.spec.ts`
+    - Show report (text based): `cd judgment-ui && npx playwright show-report`
+
+---
+
 ## 判断に迷ったときの優先順位
 
 1. AGAの3つの証明に寄与するか？
