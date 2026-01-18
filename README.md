@@ -19,12 +19,18 @@ action-gated-authorization-poc/
 ├── service-a/      # Agent + PEP（FastAPI）
 ├── service-b/      # PDP（OPA）
 ├── service-c/      # Tool mock / sandbox
-├── judgment-ui/    # Judgment UI（Next.js App Router）
+├── judgment-ui/    # Judgment UI（Next.js App Router）- 認可判定の監査画面
 │   ├── src/
 │   │   ├── app/    # App Router routes
 │   │   ├── components/
 │   │   └── lib/
 │   ├── public/
+│   └── package.json
+├── gov-ui/         # 行政問い合わせシステム（Next.js App Router）- デモ用現場UI
+│   ├── src/
+│   │   └── app/
+│   │       ├── inquiry/    # GOV-01: 問い合わせ対応画面
+│   │       └── residents/  # GOV-02: 住民データ閲覧画面
 │   └── package.json
 ├── infra/          # Infrastructure setup
 ├── logs/           # Execution logs
@@ -52,7 +58,7 @@ action-gated-authorization-poc/
 
 ## Local Development
 
-### Judgment UI (Next.js)
+### Judgment UI (Next.js) - 認可判定の監査画面
 
 ```bash
 cd judgment-ui
@@ -69,6 +75,31 @@ npm run dev
 
 - http://localhost:3000 でアクセス
 - 詳細は `docs/01-plan/03-nextjs-catchup-guide.md` を参照
+
+### Gov UI (Next.js) - 行政問い合わせシステム（デモ用現場UI）
+
+```bash
+cd gov-ui
+
+# 環境変数を設定
+cp .env.local.example .env.local
+
+# 開発サーバー起動（ポート3001）
+npm run dev
+```
+
+- http://localhost:3001 でアクセス
+- `/inquiry` - GOV-01: 問い合わせ対応画面
+- `/residents` - GOV-02: 住民データ閲覧画面
+
+#### デモシナリオ
+
+1. **gov-ui** と **judgment-ui** を並べて同時起動
+2. gov-ui の `/inquiry` で「問い合わせを処理」ボタンを押す
+3. gov-ui の `/residents` で「見てはいけないデータ」を確認
+4. judgment-ui のダッシュボードで判定ログを確認
+
+**ポイント**: gov-ui では AI Agent の内部判断やデータアクセス内容は確認できない。Judgment がない世界の危険性を示す。
 
 ### 1. service-b（OPA/PDP）を起動
 
@@ -210,14 +241,15 @@ docker run --rm -p 8181:8080 --name aga-pdp aga-pdp:local
 
 各サービスをCloud Runにデプロイするには、以下の順序で実行します。
 
-## ドメイン対応表
+### ドメイン名の対応表（DNS）
 
-| ドメイン | Cloud Run サービス | リージョン |
-| --- | --- | --- |
-| `judgment-ui.action-gated.tech` | `judgment-ui` | `asia-northeast1` |
-| `service-a.action-gated.tech` | `service-a` | `asia-northeast1` |
-| `service-b.action-gated.tech` | `service-b` | `asia-northeast1` |
-| `service-c.action-gated.tech` | `service-c` | `asia-northeast1` |
+| サービス | カスタムドメイン | Cloud Run URL | 備考 |
+|---|---|---|---|
+| judgment-ui | `https://judgment-ui.action-gated.tech` | `https://judgment-ui-374053446416.asia-northeast1.run.app` | 認可判定の監査画面 |
+| gov-ui | `https://gov-ui.action-gated.tech` | `https://gov-ui-374053446416.asia-northeast1.run.app` | 行政問い合わせシステム（デモ用） |
+| service-a | `https://service-a.action-gated.tech` | `https://service-a-374053446416.asia-northeast1.run.app` | Agent + PEP |
+| service-b | `https://service-b.action-gated.tech` | `https://service-b-374053446416.asia-northeast1.run.app` | PDP (OPA) |
+| service-c | `https://service-c.action-gated.tech` | `https://service-c-374053446416.asia-northeast1.run.app` | Tool mock |
 
 ### 1. service-b（OPA/PDP）をデプロイ
 
@@ -276,6 +308,19 @@ gcloud run deploy judgment-ui \
 ```
 
 > **Note**: `package.json` の `start` スクリプトで `PORT` 環境変数を使用するため、Dockerfile不要でソースからデプロイ可能。
+
+### 5. gov-ui（Next.js）をデプロイ
+
+```bash
+cd gov-ui
+gcloud run deploy gov-ui \
+  --source . \
+  --region asia-northeast1 \
+  --allow-unauthenticated \
+  --min-instances 0 \
+  --max-instances 5 \
+  --set-env-vars NEXT_PUBLIC_API_URL=https://service-a.action-gated.tech
+```
 
 ### オプション説明
 
@@ -394,6 +439,22 @@ curl -s -o /dev/null -w "%{http_code}" "https://judgment-ui.action-gated.tech/da
 
 ブラウザで確認:
 - https://judgment-ui.action-gated.tech/dashboard
+
+### gov-ui のテスト
+
+```bash
+# 問い合わせ対応画面
+curl -s -o /dev/null -w "%{http_code}" "https://gov-ui.action-gated.tech/inquiry"
+# => 200
+
+# 住民データ閲覧画面
+curl -s -o /dev/null -w "%{http_code}" "https://gov-ui.action-gated.tech/residents"
+# => 200
+```
+
+ブラウザで確認:
+- https://gov-ui.action-gated.tech/inquiry
+- https://gov-ui.action-gated.tech/residents
 
 ## Policy Example
 ```yaml
