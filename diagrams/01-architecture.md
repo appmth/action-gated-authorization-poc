@@ -2,12 +2,25 @@
 ## 結論：推奨アーキテクチャ（PoC向け）
 （Authなし / Envoyなし / OPAあり）
 
-**最小で刺さる構成：Cloud Run 2サービス**
+**最小で刺さる構成：Cloud Run 5サービス**
 
-- **Service A**：Agent + PEP（ゲート）API（Cloud Run）
-- **Service B**：PDP（Policy Engine / OPA）（Cloud Run）
+- **service-a**：Agent + PEP（ゲート）API（Cloud Run）
+- **service-b**：PDP（Policy Engine / OPA）（Cloud Run）
+- **service-c**：Tool mock / sandbox（Cloud Run）
+- **judgment-ui**：認可判定の監査画面（Next.js / Cloud Run）
+- **gov-ui**：行政問い合わせシステム - デモ用現場UI（Next.js / Cloud Run）
 
 この構成で、AGA PoCとして「本当に見せたい核心」を最短で証明できる。
+
+### デプロイ済みサービス一覧
+
+| サービス | カスタムドメイン | Cloud Run URL | 役割 |
+|---------|----------------|---------------|------|
+| service-a | `https://service-a.action-gated.tech` | `https://service-a-374053446416.asia-northeast1.run.app` | Agent + PEP |
+| service-b | `https://service-b.action-gated.tech` | `https://service-b-374053446416.asia-northeast1.run.app` | PDP (OPA) |
+| service-c | `https://service-c.action-gated.tech` | `https://service-c-374053446416.asia-northeast1.run.app` | Tool mock |
+| judgment-ui | `https://judgment-ui.action-gated.tech` | `https://judgment-ui-374053446416.asia-northeast1.run.app` | 認可判定の監査画面 |
+| gov-ui | `https://gov-ui.action-gated.tech` | `https://gov-ui-374053446416.asia-northeast1.run.app` | デモ用現場UI |
 
 ### Google Cloud 要件への適合
 
@@ -197,12 +210,16 @@ UI（Web）
 
 ## 技術スタックまとめ（PoC推奨セット）
 
-- フロント：Next.js（最小構成、Context 選択が肝）
-- Agent + PEP：Cloud Run（任意言語）
-- PDP：OPA（Cloud Run）
-- AI：Gemini API（Vertex AI）
-- ログ：Cloud Logging（必須）
-- データ（任意）：Firestore
+| 役割 | 技術 | サービス名 |
+|-----|------|-----------|
+| 現場UI | Next.js | gov-ui |
+| 監査UI | Next.js | judgment-ui |
+| Agent + PEP | FastAPI (Python) | service-a |
+| PDP | OPA (Rego) | service-b |
+| Tool mock | FastAPI (Python) | service-c |
+| AI | Gemini 2.0 Flash | Vertex AI |
+| ログ | Cloud Logging | - |
+| 実行基盤 | Cloud Run | asia-northeast1 |
 
 ---
 
@@ -213,19 +230,20 @@ UI（Web）
 ```mermaid
 graph TB
     subgraph "User Interface"
-        UI[Web UI<br/>Next.js]
+        GovUI[gov-ui<br/>行政問い合わせシステム<br/>Next.js]
+        JudgmentUI[judgment-ui<br/>認可判定の監査画面<br/>Next.js]
     end
 
-    subgraph "Cloud Run - Service A"
+    subgraph "Cloud Run - service-a"
         Agent[Agent<br/>Gemini API]
         PEP[PEP<br/>Policy Enforcement Point]
     end
 
-    subgraph "Cloud Run - Service B"
+    subgraph "Cloud Run - service-b"
         PDP[PDP<br/>OPA + Rego Policy]
     end
 
-    subgraph "Backend Services"
+    subgraph "Cloud Run - service-c"
         Tool[Tool API<br/>Resident Info API<br/>Mock]
     end
 
@@ -233,24 +251,30 @@ graph TB
         Logging[Cloud Logging<br/>Audit Log]
     end
 
-    UI -->|1. User Input<br/>+ Context| Agent
+    GovUI -->|1. User Input<br/>+ Context| Agent
     Agent -->|2. Action Proposal| PEP
     PEP -->|3. Action + Context<br/>purpose, time, data_sensitivity| PDP
     PDP -->|4. Decision<br/>Allow/Deny + Reason| PEP
     PEP -->|5a. Execute<br/>if Allowed| Tool
-    PEP -->|5b. Block + Reason<br/>if Denied| UI
-    Tool -->|6. Result| UI
+    PEP -->|5b. Block + Reason<br/>if Denied| GovUI
+    Tool -->|6. Result| GovUI
     PEP -->|Audit Log<br/>request/decision/reason| Logging
+
+    JudgmentUI -->|判定ログ取得| Agent
 
     style PEP fill:#ff6b6b
     style PDP fill:#4ecdc4
     style Logging fill:#ffe66d
+    style JudgmentUI fill:#a8dadc
+    style GovUI fill:#f4a261
 ```
 
 **説明:**
-- Service A（Agent + PEP）が実行直前に必ずService B（PDP）に照会
+- **gov-ui**: 現場担当者が使うUI（問い合わせ対応、住民データ閲覧）
+- **judgment-ui**: 監査担当者が使うUI（判定ログの確認）
+- service-a（Agent + PEP）が実行直前に必ずservice-b（PDP）に照会
 - PDPはContextを含めて判断し、理由とともに結果を返す
-- PEPはAllowの場合のみToolを実行、Denyの場合は実行前にブロック
+- PEPはAllowの場合のみservice-c（Tool）を実行、Denyの場合は実行前にブロック
 - 全ての判断はCloud Loggingに記録される
 
 ---
@@ -263,11 +287,15 @@ graph TB
         Browser[Web Browser]
     end
 
-    subgraph GCP_Frontend["☁️ GCP Cloud Run - Frontend"]
-        NextJS["☁️ Cloud Run<br/>Next.js Application<br/>Port: 3000<br/>Framework: React"]
+    subgraph GCP_GovUI["☁️ Cloud Run - gov-ui"]
+        GovUI["☁️ Cloud Run<br/>gov-ui<br/>Next.js<br/>Port: 8080"]
     end
 
-    subgraph GCP_ServiceA["☁️ GCP Cloud Run - Service A: Agent + PEP"]
+    subgraph GCP_JudgmentUI["☁️ Cloud Run - judgment-ui"]
+        JudgmentUI["☁️ Cloud Run<br/>judgment-ui<br/>Next.js<br/>Port: 8080"]
+    end
+
+    subgraph GCP_ServiceA["☁️ Cloud Run - service-a: Agent + PEP"]
         FastAPI["☁️ Cloud Run<br/>FastAPI Application<br/>Port: 8080<br/>Python 3.11"]
         Agent["Agent Component<br/>LLM Orchestration"]
         PEP["PEP Component<br/>Policy Enforcement"]
@@ -277,113 +305,73 @@ graph TB
         VertexAI["🤖 Vertex AI<br/>Gemini 1.5 Pro<br/>Gemini 2.0 Flash"]
     end
 
-    subgraph GCP_ServiceB["☁️ GCP Cloud Run - Service B: PDP"]
-        OPA["☁️ Cloud Run<br/>Open Policy Agent<br/>Port: 8181<br/>Version: 0.60+"]
+    subgraph GCP_ServiceB["☁️ Cloud Run - service-b: PDP"]
+        OPA["☁️ Cloud Run<br/>Open Policy Agent<br/>Port: 8080<br/>Version: 0.60+"]
         Rego["Rego Policy Files<br/>authorization.rego"]
     end
 
-    subgraph GCP_Tool["☁️ GCP Cloud Run - Tool API"]
+    subgraph GCP_ServiceC["☁️ Cloud Run - service-c: Tool mock"]
         ToolAPI["☁️ Cloud Run<br/>Resident Info API<br/>Port: 8080<br/>Mock Service"]
-    end
-
-    subgraph GCP_Data["🗄️ GCP Cloud Firestore"]
-        Firestore[("🗄️ Cloud Firestore<br/>Collection: audit_logs<br/>Optional: 履歴保存")]
     end
 
     subgraph GCP_Obs["📊 GCP Observability"]
         Logging["📝 Cloud Logging<br/>Structured JSON<br/>Retention: 30 days"]
-        Monitoring["📊 Cloud Monitoring<br/>Latency, Error Rate<br/>SLO Alerts"]
     end
 
-    subgraph GCP_Security["🔐 GCP Security & Infrastructure"]
-        Secrets["🔐 Secret Manager<br/>Gemini API Key<br/>Service Credentials"]
-        IAM["👤 Cloud IAM<br/>Service Accounts:<br/>agent-sa / pdp-sa / tool-sa"]
-    end
-
-    subgraph GCP_Network["🌐 GCP Networking"]
-        VPC["🌐 VPC Network<br/>Serverless VPC Access<br/>Internal Traffic Only"]
-    end
-
-    Browser -->|"HTTPS<br/>(Public)"| NextJS
-    NextJS -->|"REST API<br/>(Internal VPC)"| FastAPI
+    Browser -->|"HTTPS<br/>(Public)"| GovUI
+    Browser -->|"HTTPS<br/>(Public)"| JudgmentUI
+    GovUI -->|"REST API"| FastAPI
+    JudgmentUI -->|"REST API<br/>/judgments"| FastAPI
     FastAPI --> Agent
     Agent -->|"API Call<br/>(External HTTPS)"| VertexAI
     Agent --> PEP
 
-    PEP -->|"Authorization Request<br/>HTTP POST<br/>(Internal VPC)"| OPA
+    PEP -->|"Authorization Request<br/>HTTP POST"| OPA
     OPA --> Rego
     OPA -->|"Response<br/>{allow, reason}"| PEP
 
-    PEP -->|"Tool Execution<br/>(if Allow only)<br/>(Internal VPC)"| ToolAPI
-    ToolAPI -.->|"Optional Write"| Firestore
+    PEP -->|"Tool Execution<br/>(if Allow only)"| ToolAPI
 
     FastAPI -.->|"Audit Log"| Logging
     PEP -.->|"Decision Log"| Logging
-    OPA -.->|"Policy Log"| Logging
 
-    FastAPI -.->|"Metrics"| Monitoring
-    OPA -.->|"Metrics"| Monitoring
-    ToolAPI -.->|"Metrics"| Monitoring
-
-    FastAPI --> VPC
-    OPA --> VPC
-    ToolAPI --> VPC
-
-    FastAPI -.->|"Get Secret"| Secrets
-
-    FastAPI -.->|"Auth as agent-sa"| IAM
-    OPA -.->|"Auth as pdp-sa"| IAM
-    ToolAPI -.->|"Auth as tool-sa"| IAM
-
-    style NextJS fill:#E8F4F8,stroke:#4285F4,stroke-width:2px
+    style GovUI fill:#f4a261,stroke:#4285F4,stroke-width:2px
+    style JudgmentUI fill:#a8dadc,stroke:#4285F4,stroke-width:2px
     style FastAPI fill:#E8F4F8,stroke:#4285F4,stroke-width:2px
     style OPA fill:#E8F4F8,stroke:#4285F4,stroke-width:2px
     style ToolAPI fill:#E8F4F8,stroke:#4285F4,stroke-width:2px
     style PEP fill:#ff6b6b
     style Rego fill:#E8F4F8
     style VertexAI fill:#E8F5E9,stroke:#34A853,stroke-width:2px
-    style Firestore fill:#F3E5F5,stroke:#9C27B0,stroke-width:2px
     style Logging fill:#FFF9C4,stroke:#FBBC04,stroke-width:2px
-    style Monitoring fill:#FFF9C4,stroke:#FBBC04,stroke-width:2px
-    style Secrets fill:#FFE0B2,stroke:#EA8600,stroke-width:2px
-    style IAM fill:#FFE0B2,stroke:#EA8600,stroke-width:2px
-    style VPC fill:#F5F5F5,stroke:#757575,stroke-width:2px
 ```
 
 **GCPサービス詳細一覧:**
 
-| コンポーネント | GCPサービス | 詳細仕様 | 役割 |
-|--------------|------------|---------|------|
-| **Frontend** | Cloud Run | Next.js (React), Port 3000 | ユーザーインターフェース、Context選択UI |
-| **Service A** | Cloud Run | FastAPI (Python 3.11), Port 8080 | Agent + PEP統合、リクエストオーケストレーション |
-| **AI Engine** | Vertex AI | Gemini 1.5 Pro / 2.0 Flash | Action生成、自然言語理解 |
-| **Service B (PDP)** | Cloud Run | OPA 0.60+, Port 8181 | ポリシーベース認可判断 |
-| **Policy Store** | Container内 | Rego Policy Files | 認可ルールをコードで管理 |
-| **Tool API** | Cloud Run | Mock API, Port 8080 | 住民情報取得（業務API） |
-| **履歴DB** | Cloud Firestore | Collection: audit_logs | リクエスト履歴（オプション） |
-| **監査ログ** | Cloud Logging | Structured JSON, 30日保持 | 全リクエスト・決定・理由を記録 |
-| **監視** | Cloud Monitoring | Latency, Error Rate metrics | SLO監視、アラート設定 |
-| **ネットワーク** | VPC Network | Serverless VPC Access | Cloud Run間のプライベート通信 |
-| **シークレット** | Secret Manager | Encrypted at rest | Gemini APIキー、認証情報 |
-| **認証認可** | Cloud IAM | Service Accounts (3個) | 最小権限の原則、サービス間認証 |
+| コンポーネント | Cloud Run サービス | URL | 役割 |
+|--------------|-------------------|-----|------|
+| **gov-ui** | gov-ui | `https://gov-ui.action-gated.tech` | 行政問い合わせシステム（現場UI） |
+| **judgment-ui** | judgment-ui | `https://judgment-ui.action-gated.tech` | 認可判定の監査画面 |
+| **service-a** | service-a | `https://service-a.action-gated.tech` | Agent + PEP統合 |
+| **service-b** | service-b | `https://service-b.action-gated.tech` | PDP（OPA + Rego） |
+| **service-c** | service-c | `https://service-c.action-gated.tech` | Tool mock（住民情報API） |
+| **AI Engine** | Vertex AI | - | Gemini 2.0 Flash |
 
 **通信パターン詳細:**
 
-| 通信経路 | プロトコル | 公開/内部 | 認証方式 |
-|---------|-----------|---------|---------|
-| Browser → Frontend | HTTPS | Public | なし（将来的にAuth0） |
-| Frontend → Service A | HTTPS | Internal (VPC) | Service Account |
-| Service A → Vertex AI | HTTPS | External (Google API) | API Key (Secret Manager) |
-| Service A → Service B | HTTP | Internal (VPC) | Service Account |
-| Service A → Tool API | HTTP | Internal (VPC) | Service Account |
-| Services → Cloud Logging | gRPC | Internal | Automatic (Cloud SDK) |
-| Services → Secret Manager | HTTPS | Internal | IAM Policy |
+| 通信経路 | プロトコル | 公開/内部 |
+|---------|-----------|---------|
+| Browser → gov-ui | HTTPS | Public |
+| Browser → judgment-ui | HTTPS | Public |
+| gov-ui → service-a | HTTPS | Public |
+| judgment-ui → service-a | HTTPS | Public |
+| service-a → Vertex AI | HTTPS | External (Google API) |
+| service-a → service-b | HTTPS | Public |
+| service-a → service-c | HTTPS | Public |
 
 **デプロイ設定:**
-- **Cloud Run**: すべてコンテナ化、自動スケーリング（min: 0, max: 10）
-- **VPC**: Serverless VPC Accessコネクタ使用
-- **Service Account**: 各サービスに専用のSAを割り当て
-- **リージョン**: asia-northeast1 (東京) 推奨
+- **Cloud Run**: すべてコンテナ化、自動スケーリング（min: 0, max: 5）
+- **リージョン**: asia-northeast1 (東京)
 
 ---
 
