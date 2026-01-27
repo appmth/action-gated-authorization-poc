@@ -247,9 +247,10 @@ docker run --rm -p 8181:8080 --name aga-pdp aga-pdp:local
 |---|---|---|---|
 | judgment-ui | `https://judgment-ui.action-gated.tech` | `https://judgment-ui-374053446416.asia-northeast1.run.app` | 認可判定の監査画面 |
 | gov-ui | `https://gov-ui.action-gated.tech` | `https://gov-ui-374053446416.asia-northeast1.run.app` | 行政問い合わせシステム（デモ用） |
-| service-a | `https://service-a.action-gated.tech` | `https://service-a-374053446416.asia-northeast1.run.app` | Agent + PEP |
+| service-a | `https://service-a.action-gated.tech` | `https://service-a-374053446416.asia-northeast1.run.app` | Judgment (PEP): /authorize + /execute |
 | service-b | `https://service-b.action-gated.tech` | `https://service-b-374053446416.asia-northeast1.run.app` | PDP (OPA) |
 | service-c | `https://service-c.action-gated.tech` | `https://service-c-374053446416.asia-northeast1.run.app` | Tool mock |
+| envoy-gateway | `https://envoy-gateway.action-gated.tech` | `https://envoy-gateway-374053446416.asia-northeast1.run.app` | JWT検証 + Tool Proxy |
 
 ### 1. service-b（OPA/PDP）をデプロイ
 
@@ -321,6 +322,27 @@ gcloud run deploy gov-ui \
   --max-instances 5 \
   --set-env-vars NEXT_PUBLIC_API_URL=https://service-a.action-gated.tech
 ```
+
+### 6. envoy-gateway（Envoy Proxy）をデプロイ
+
+```bash
+cd envoy-gateway
+gcloud run deploy envoy-gateway \
+  --source . \
+  --region asia-northeast1 \
+  --allow-unauthenticated \
+  --min-instances 0 \
+  --max-instances 5 \
+  --set-env-vars SERVICE_A_HOST=service-a.action-gated.tech,\
+SERVICE_A_PORT=443,\
+SERVICE_C_HOST=service-c.action-gated.tech,\
+SERVICE_C_PORT=443,\
+JWKS_URI=https://service-a.action-gated.tech/.well-known/jwks.json,\
+UPSTREAM_TLS_SERVICE_A='transport_socket: { name: envoy.transport_sockets.tls, typed_config: { "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext, sni: service-a.action-gated.tech } }',\
+UPSTREAM_TLS_SERVICE_C='transport_socket: { name: envoy.transport_sockets.tls, typed_config: { "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext, sni: service-c.action-gated.tech } }'
+```
+
+> **Note**: Envoy は環境変数に応じて起動時に `envoy.yaml` を生成（`envsubst`）し、動的に接続先を切り替えます。
 
 ### オプション説明
 

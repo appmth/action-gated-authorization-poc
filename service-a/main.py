@@ -4,15 +4,20 @@ import os
 import time
 import uuid
 from collections import deque
-from datetime import datetime
-
+from datetime import datetime, timedelta, timezone
+import jwt
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
+import base64
+from google.cloud import firestore
 import google.auth
 import google.auth.transport.requests
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 def log_event(
@@ -62,8 +67,11 @@ def generate_idempotency_key(request_id: str, action: str) -> str:
 PDP_BASE_URL = os.getenv("PDP_URL", "http://localhost:8181")
 PDP_DECISION_PATH = "/v1/data/authorization/decision"
 
-# Tool (service-c) URL
+# Tool (service-c) URL (直接呼び出し用、レガシー)
 TOOL_URL = os.getenv("TOOL_URL", "http://localhost:8082")
+
+# Envoy Gateway URL (構造的強制力)
+ENVOY_URL = os.getenv("ENVOY_URL", "http://localhost:10000")
 
 # Vertex AI settings
 VERTEX_PROJECT = os.getenv("VERTEX_PROJECT", "")
@@ -79,6 +87,119 @@ class Context(BaseModel):
     purpose: str
     time: str
     data_sensitivity: str
+
+
+class AuthorizeRequest(BaseModel):
+    agent_id: str
+    action: str
+    context: Context
+    request_id: str | None = Field(default_factory=lambda: str(uuid.uuid4()))
+
+
+class AuthorizeResponse(BaseModel):
+    request_id: str
+    decision: str
+    reason: str
+    execution_handle: str | None = None
+    expires_in_seconds: int | None = None
+
+
+# RSA Key Generation for PoC
+PRIVATE_KEY_PATH = "private_key.pem"
+
+def get_or_generate_key():
+    if os.path.exists(PRIVATE_KEY_PATH):
+        with open(PRIVATE_KEY_PATH, "rb") as f:
+            private_key = serialization.load_pem_private_key(
+                f.read(), password=None, backend=default_backend()
+            )
+    else:
+        private_key = rsa.generate_private_key(
+            public_exponent=65537, key_size=2048, backend=default_backend()
+        )
+        with open(PRIVATE_KEY_PATH, "wb") as f:
+            f.write(
+                private_key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption(),
+                )
+            )
+    return private_key
+
+PRIVATE_KEY = get_or_generate_key()
+PUBLIC_KEY = PRIVATE_KEY.public_key()
+
+def get_jwks():
+    public_numbers = PUBLIC_KEY.public_numbers()
+    
+    def to_base64url(val):
+        return base64.urlsafe_b64encode(val.to_bytes((val.bit_length() + 7) // 8, 'big')).decode('utf-8').rstrip('=')
+
+    return {
+        "keys": [
+            {
+                "kty": "RSA",
+                "alg": "RS256",
+                "use": "sig",
+                "kid": "judgment-key-1",
+                "n": to_base64url(public_numbers.n),
+                "e": to_base64url(public_numbers.e),
+            }
+        ]
+    }
+
+
+class ExecuteRequest(BaseModel):
+    request_id: str
+    execution_handle: str
+    parameters: dict
+
+
+class ExecuteResponse(BaseModel):
+    request_id: str
+    status: str
+    result: dict | None = None
+    reason: str | None = None
+
+
+# Firestore Client (Lazy Initialization)
+_db = None
+_jti_collection = None
+
+
+def get_firestore_client():
+    """Firestore クライアントを遅延初期化で取得"""
+    global _db, _jti_collection
+    if _db is None:
+        _db = firestore.Client()
+        _jti_collection = _db.collection("jti_store")
+    return _db, _jti_collection
+
+
+def register_jti(jti: str, jwt_exp_timestamp: int) -> bool:
+    """jtiを登録。既に存在する場合はFalseを返す"""
+    db, jti_collection = get_firestore_client()
+    doc_ref = jti_collection.document(jti)
+    jwt_exp = datetime.fromtimestamp(jwt_exp_timestamp, tz=timezone.utc)
+
+    @firestore.transactional
+    def create_if_not_exists(transaction):
+        doc = doc_ref.get(transaction=transaction)
+        if doc.exists:
+            return False  # 既に使用済み
+
+        now = datetime.now(timezone.utc)
+        transaction.set(doc_ref, {
+            "jti": jti,
+            "used_at": now,
+            "expired_at": jwt_exp,
+            "ttl_at": now + timedelta(minutes=10)
+        })
+        return True
+
+    transaction = db.transaction()
+    return create_if_not_exists(transaction)
 
 
 class ActionRequest(BaseModel):
@@ -210,6 +331,52 @@ async def call_tool(
                 json=payload,
                 headers=headers,
                 timeout=3.0,
+            )
+            latency_ms = (time.perf_counter() - start) * 1000
+            if resp.status_code >= 400:
+                return ToolResult(
+                    resp.status_code, latency_ms, endpoint, method,
+                    error_type=f"http_{resp.status_code}",
+                )
+            return ToolResult(
+                resp.status_code, latency_ms, endpoint, method,
+                data=resp.json(),
+            )
+    except httpx.TimeoutException:
+        latency_ms = (time.perf_counter() - start) * 1000
+        return ToolResult(0, latency_ms, endpoint, method, error_type="timeout")
+    except Exception as e:
+        latency_ms = (time.perf_counter() - start) * 1000
+        return ToolResult(0, latency_ms, endpoint, method, error_type="connection_error")
+
+
+async def call_tool_via_envoy(
+    request_id: str,
+    action: str,
+    context: dict,
+    execution_handle: str,
+) -> ToolResult:
+    """Tool を Envoy Gateway 経由で呼び出す（構造的強制力）"""
+    payload = {
+        "request_id": request_id,
+        "action": action,
+        "context": context,
+    }
+    endpoint = f"{ENVOY_URL}/tool/execute"
+    method = "POST"
+    headers = {
+        "Authorization": f"Bearer {execution_handle}",
+        "X-Request-Id": request_id,
+        "Content-Type": "application/json",
+    }
+    start = time.perf_counter()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                endpoint,
+                json=payload,
+                headers=headers,
+                timeout=10.0,
             )
             latency_ms = (time.perf_counter() - start) * 1000
             if resp.status_code >= 400:
@@ -384,6 +551,182 @@ def hello():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/.well-known/jwks.json")
+def jwks():
+    """Envoy が JWT 検証に使用する JWKS を公開"""
+    return get_jwks()
+
+
+@app.post("/authorize", response_model=AuthorizeResponse)
+async def authorize(request: AuthorizeRequest):
+    """
+    1. PDP に認可判定を問い合わせ
+    2. allow の場合、execution_handle (JWT) を発行
+    """
+    request_id = request.request_id or str(uuid.uuid4())
+    context_dict = request.context.model_dump()
+    
+    log_event(
+        phase="authz_request",
+        request_id=request_id,
+        action=request.action,
+        context=context_dict,
+    )
+
+    try:
+        decision = await call_pdp(request.action, context_dict)
+        
+        if decision.allow:
+            # JWT Claims
+            now = datetime.now(timezone.utc)
+            exp = now + timedelta(seconds=60)
+            
+            payload = {
+                "iss": "judgment",
+                "aud": "envoy-gateway",
+                "sub": request.agent_id,
+                "jti": str(uuid.uuid4()),
+                "exp": int(exp.timestamp()),
+                "iat": int(now.timestamp()),
+                "scope": f"execute:{request.action}",
+                "req_id": request_id,
+            }
+            
+            # Sign JWT
+            token = jwt.encode(
+                payload,
+                PRIVATE_KEY,
+                algorithm="RS256",
+                headers={"kid": "judgment-key-1"}
+            )
+            
+            log_event(
+                phase="authz_decision",
+                request_id=request_id,
+                action=request.action,
+                decision={"allow": True, "reason": decision.reason},
+                reason=decision.reason,
+            )
+            
+            return AuthorizeResponse(
+                request_id=request_id,
+                decision="allow",
+                reason=decision.reason,
+                execution_handle=token,
+                expires_in_seconds=60
+            )
+        else:
+            log_event(
+                phase="authz_decision",
+                request_id=request_id,
+                action=request.action,
+                decision={"allow": False, "reason": decision.reason},
+                reason=decision.reason,
+            )
+            return AuthorizeResponse(
+                request_id=request_id,
+                decision="deny",
+                reason=decision.reason
+            )
+
+    except PDPError as e:
+        log_event(
+            phase="authz_error",
+            request_id=request_id,
+            reason=str(e),
+        )
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/execute", response_model=ExecuteResponse)
+async def execute(request: ExecuteRequest):
+    """
+    1. execution_handle (JWT) を検証
+    2. jti を Firestore でチェック（二重実行防止）
+    3. OK なら Tool にプロキシ
+    """
+    try:
+        # JWT 検証（署名、期限）
+        # 注意: PoC なので自前の PUBLIC_KEY で検証
+        decoded = jwt.decode(
+            request.execution_handle,
+            PUBLIC_KEY,
+            algorithms=["RS256"],
+            audience="envoy-gateway"
+        )
+        
+        jti = decoded.get("jti")
+        exp_ts = decoded.get("exp")
+        request_id = decoded.get("req_id") or request.request_id
+
+        # Firestore で jti チェック（one-time）
+        if not register_jti(jti, exp_ts):
+            log_event(
+                phase="exec_blocked",
+                request_id=request_id,
+                reason="execution_handle already used",
+            )
+            return ExecuteResponse(
+                request_id=request_id,
+                status="blocked",
+                reason="already used"
+            )
+
+        # Tool 実行（本来は Envoy 経由だが、まずは直叩きで確認）
+        # scope からアクションを特定
+        scope = decoded.get("scope", "")
+        action = scope.replace("execute:", "") if scope.startswith("execute:") else "unknown"
+        
+        # ダミーのコンテキスト生成（本来は JWT や DB から取得）
+        dummy_context = {"purpose": "inquiry", "source": "jwt_authorized"}
+        idempotency_key = generate_idempotency_key(request_id, action)
+
+        log_event(
+            phase="exec_started",
+            request_id=request_id,
+            action=action,
+        )
+
+        # Tool 実行（Envoy 経由）
+        tool_result = await call_tool_via_envoy(
+            request_id=request_id,
+            action=action,
+            context=dummy_context,
+            execution_handle=request.execution_handle
+        )
+        
+        if tool_result.ok:
+            log_event(
+                phase="exec_success",
+                request_id=request_id,
+                action=action,
+            )
+            return ExecuteResponse(
+                request_id=request_id,
+                status="success",
+                result=tool_result.data
+            )
+        else:
+            log_event(
+                phase="exec_failed",
+                request_id=request_id,
+                reason=f"tool error: {tool_result.error_type}",
+            )
+            return ExecuteResponse(
+                request_id=request_id,
+                status="failed",
+                reason=tool_result.error_type
+            )
+
+    except jwt.ExpiredSignatureError:
+        return ExecuteResponse(request_id=request.request_id, status="blocked", reason="expired")
+    except jwt.InvalidTokenError as e:
+        return ExecuteResponse(request_id=request.request_id, status="blocked", reason=f"invalid token: {str(e)}")
+    except Exception as e:
+        log_event(phase="exec_error", request_id=request.request_id, reason=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/judgments")

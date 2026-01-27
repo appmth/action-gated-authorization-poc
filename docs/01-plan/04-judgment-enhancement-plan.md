@@ -18,13 +18,15 @@
 
 ### 現在のPoC構成（実装済み）
 
-| サービス | 役割 | 技術 |
-|---------|------|------|
-| service-a | Agent + Judgment（PEP） | FastAPI |
-| service-b | PDP（OPA） | OPA + Rego |
-| service-c | Tool mock | FastAPI |
-| judgment-ui | Judgment監査画面 | Next.js |
-| gov-ui | デモ用現場UI | Next.js |
+| サービス | 役割 | 技術 | GCPサービス | カスタムドメイン |
+|---------|------|------|-------------|-----------------|
+| service-a | Agent + Judgment（PEP） | FastAPI | Cloud Run | https://service-a.action-gated.tech |
+| service-b | PDP（OPA） | OPA + Rego | Cloud Run | https://service-b.action-gated.tech |
+| service-c | Tool mock | FastAPI | Cloud Run | https://service-c.action-gated.tech |
+| judgment-ui | Judgment監査画面 | Next.js | Cloud Run | https://judgment-ui.action-gated.tech |
+| gov-ui | デモ用現場UI | Next.js | Cloud Run | https://gov-ui.action-gated.tech |
+
+**GCP情報**: リージョン `asia-northeast1`（東京）、ドメイン `action-gated.tech`
 
 ### 拡張後のゴール
 
@@ -101,6 +103,20 @@ graph TB
 | **Envoy Gateway** | JWT検証、Proxy | 検証（verify） |
 | **Tool API** | 業務処理（ブラックボックス） | なし |
 
+### 拡張後のサービス一覧
+
+| サービス | 役割 | 技術 | GCPサービス | カスタムドメイン | 備考 |
+|---------|------|------|-------------|-----------------|------|
+| service-a | Judgment（/authorize + /execute + JWKS） | FastAPI | Cloud Run | https://service-a.action-gated.tech | 拡張 |
+| service-b | PDP（OPA） | OPA + Rego | Cloud Run | https://service-b.action-gated.tech | 既存 |
+| envoy-gateway | JWT検証 + Proxy | Envoy | Cloud Run | https://envoy-gateway.action-gated.tech | **新規** |
+| service-c | Tool API（モック） | FastAPI | Cloud Run | https://service-c.action-gated.tech | 既存 |
+| judgment-ui | Judgment監査画面 | Next.js | Cloud Run | https://judgment-ui.action-gated.tech | 既存 |
+| gov-ui | デモ用現場UI | Next.js | Cloud Run | https://gov-ui.action-gated.tech | 既存 |
+| jti-store | JTI Store（one-time検証） | - | Firestore | - | **新規** |
+
+**GCP情報**: リージョン `asia-northeast1`（東京）、ドメイン `action-gated.tech`
+
 ### 経路の強制
 
 ```
@@ -117,112 +133,76 @@ Agent → Envoy → Tool     ← Envoyが止める（JWTなし or 無効）
 
 ## シーケンス図
 
-### Allowフロー（正常系）
+### mermaid記法メモ
+
+| 記法 | 用途 | 説明 |
+|------|------|------|
+| `alt`/`else` | 条件分岐 | どちらかのパスを通る（if/else相当） |
+| `break` | 中断・終了 | エラー等で処理を打ち切る（early return相当） |
+
+### 基本フロー
 
 ```mermaid
 sequenceDiagram
     participant Agent
-    participant Judgment as Judgment<br/>(/authorize, /execute)
-    participant PDP as PDP<br/>(OPA)
+    participant Judgment as Judgment
+    participant PDP as PDP（OPA）
     participant JTI as JTI Store
-    participant Envoy as Envoy<br/>Gateway
+    participant Envoy as Envoy Gateway
     participant Tool as Tool API
-    participant Log as Cloud Logging
 
-    Note over Agent,Tool: Phase 1: 認可判定 + JWT発行
+    Note over Agent,Tool: Phase 1: 認可判定（/authorize）
 
-    Agent->>Judgment: POST /authorize<br/>{action, context, agent_id}
-    Judgment->>PDP: Query<br/>{action, context}
-    PDP->>PDP: Rego評価
-    PDP-->>Judgment: {allow: true, reason: "..."}
-    Judgment->>Judgment: execution_handle (JWT) 生成<br/>jti, exp, scope, req_id
-    Judgment->>Log: AUTHZ_DECISION<br/>{allow, reason, jti}
-    Judgment-->>Agent: {decision: "allow",<br/>execution_handle, expires_in}
+    Agent->>Judgment: POST /authorize<br/>{action, context}
+    Judgment->>PDP: Query
+    PDP-->>Judgment: {allow, reason}
 
-    Note over Agent,Tool: Phase 2: 実行
+    alt allow = true
+        Judgment->>Judgment: JWT発行（exp=60s）
+        Judgment-->>Agent: {decision: "allow", execution_handle}
+    else allow = false
+        Judgment-->>Agent: {decision: "deny", reason}
+        Note over Agent: 終了（execution_handleなし）
+    end
+
+    Note over Agent,Tool: Phase 2: 実行（/execute）
 
     Agent->>Judgment: POST /execute<br/>{execution_handle, parameters}
-    Judgment->>Judgment: JWT検証<br/>(sig, exp, aud, scope)
-    Judgment->>JTI: jti 確認（未使用?）
-    JTI-->>Judgment: OK（初回）
-    Judgment->>JTI: jti 登録（使用済み）
-    Judgment->>Envoy: Bearer JWT<br/>+ X-Request-Id
-    Envoy->>Envoy: JWT検証<br/>(sig, exp, aud)
+
+    break JWT署名不正
+        Judgment-->>Agent: {status: "blocked", reason: "invalid signature"}
+    end
+
+    break JWT期限切れ（60秒超過）
+        Judgment-->>Agent: {status: "blocked", reason: "expired"}
+    end
+
+    Judgment->>JTI: jti登録（トランザクション）
+
+    break jti既に使用済み
+        JTI-->>Judgment: 登録失敗
+        Judgment-->>Agent: {status: "blocked", reason: "already used"}
+    end
+
+    JTI-->>Judgment: OK
+    Judgment->>Envoy: Bearer JWT
+    Envoy->>Envoy: JWT検証（sig, exp, aud）
     Envoy->>Tool: リクエスト転送
     Tool-->>Envoy: Result
     Envoy-->>Judgment: Result
-    Judgment->>Log: EXEC_RESULT<br/>{status, latency}
     Judgment-->>Agent: {status: "success", result}
 ```
 
-### Denyフロー（ポリシー拒否）
+### 構造的強制力のポイント
 
-```mermaid
-sequenceDiagram
-    participant Agent
-    participant Judgment as Judgment<br/>(/authorize)
-    participant PDP as PDP<br/>(OPA)
-    participant Log as Cloud Logging
+Phase 2（/execute）で以下の順に検証し、どこかで失敗すればToolに到達しない：
 
-    Agent->>Judgment: POST /authorize<br/>{action, context}
-    Judgment->>PDP: Query<br/>{action, context}
-    PDP->>PDP: Rego評価
-    PDP-->>Judgment: {allow: false,<br/>reason: "深夜帯のPIIアクセスは不可"}
-    Judgment->>Log: AUTHZ_DECISION<br/>{allow: false, reason}
-    Judgment-->>Agent: {decision: "deny",<br/>reason: "..."}
-
-    Note over Agent: execution_handle なし<br/>/execute を呼んでも無効
-```
-
-### 構造的強制力のデモシナリオ
-
-#### シナリオA：期限切れJWT
-
-```mermaid
-sequenceDiagram
-    participant Agent
-    participant Judgment as Judgment
-    participant Envoy as Envoy
-
-    Note over Agent: execution_handle取得後<br/>60秒以上経過
-
-    Agent->>Judgment: POST /execute<br/>{execution_handle (期限切れ)}
-    Judgment->>Judgment: JWT検証
-    Note over Judgment: exp < now → NG
-    Judgment-->>Agent: {status: "blocked",<br/>reason: "JWT expired"}
-```
-
-#### シナリオB：二重実行（one-time違反）
-
-```mermaid
-sequenceDiagram
-    participant Agent
-    participant Judgment as Judgment
-    participant JTI as JTI Store
-
-    Note over Agent: 同じexecution_handleで<br/>2回目の実行
-
-    Agent->>Judgment: POST /execute<br/>{execution_handle (使用済み)}
-    Judgment->>Judgment: JWT検証 OK
-    Judgment->>JTI: jti 確認
-    JTI-->>Judgment: NG（使用済み）
-    Judgment-->>Agent: {status: "blocked",<br/>reason: "execution_handle already used"}
-```
-
-#### シナリオC：JWT改ざん
-
-```mermaid
-sequenceDiagram
-    participant Agent
-    participant Judgment as Judgment
-
-    Note over Agent: JWTの1文字を改変
-
-    Agent->>Judgment: POST /execute<br/>{execution_handle (改ざん)}
-    Judgment->>Judgment: JWT検証
-    Note over Judgment: 署名不一致 → NG
-    Judgment-->>Agent: {status: "blocked",<br/>reason: "invalid signature"}
-```
+| 順序 | 検証項目 | 失敗時の理由 | 検証場所 |
+|------|---------|-------------|---------|
+| 1 | JWT署名 | invalid signature | Judgment |
+| 2 | JWT期限（exp） | expired | Judgment |
+| 3 | jti未使用 | already used | Judgment + Firestore |
+| 4 | JWT検証（二重） | 401 Unauthorized | Envoy |
 
 ---
 
@@ -262,7 +242,9 @@ sequenceDiagram
 |------|------|
 | execution_handle | 「外部APIの認証トークン」ではなく **Judgment内輪の実行チケット** |
 | Tool（外部API） | ブラックボックス（JWT検証しない） |
-| 検証 | **Judgment と Envoy の二重**（デモで"構造の強制力"を示すため） |
+| JWT検証 | **Judgment**（署名/exp/jti） + **Envoy**（署名/exp/aud）の役割分担 |
+| JTI Store | **Firestore**（TTL自動削除、トランザクションで排他制御） |
+| JWKS | **Judgment**に `/.well-known/jwks.json` を設置、Envoyが参照 |
 
 ---
 
@@ -280,9 +262,10 @@ PDP（OPA）から allow/deny + reason を得て、allowなら **execution_handl
 - [ ] OPAへ投げる `input` を **固定スキーマ**にする
   - 例：`{action, agent_id, context, request_id, now, ...}`
 - [ ] OPAレスポンス（allow/deny/reason）を Judgment 側で正規化
-- [ ] allow時に execution_handle を生成（署名付きJWT）
-  - [ ] `iss/aud/sub/jti/exp/scope/req_id` は必須
+- [ ] allow時に execution_handle を生成（署名付きJWT、**exp=60秒**）
+  - [ ] `iss/aud/sub/jti/exp/iat/scope/req_id` は必須
   - [ ] `ctx_hash` を入れるならここで生成（PoCではoptional）
+- [ ] JWKSエンドポイント `/.well-known/jwks.json` を実装（Envoyが参照）
 - [ ] Cloud Logging に `AUTHZ_DECISION` を出す（req_id, allow, reason, scope, jti, exp）
 - [ ] レスポンスに `execution_handle` を返す（allow時のみ）
 
@@ -295,19 +278,16 @@ PDP（OPA）から allow/deny + reason を得て、allowなら **execution_handl
 Agentが提示した execution_handle を検証し、OKなら Envoy 経由でToolを実行する。
 **one-time**（二重実行防止）を入れて「使い捨てチケット」感を出す。
 
-**検証タスク**
+**検証タスク**（検証順序は「構造的強制力のポイント」参照）
 
 - [ ] `/execute` の入出力を確定（7章「インターフェース」参照）
 - [ ] JWT検証（Judgment内）
-  - [ ] 署名検証（公開鍵/秘密鍵運用は最小で）
-  - [ ] `exp`（短命）
-  - [ ] `aud`（envoy-gateway など）
-  - [ ] `scope`（executeするactionに一致）
-  - [ ] `req_id`（監査の串刺し）
-- [ ] one-time実行（最低限の仕組み）
-  - [ ] `jti` をストア（Firestore/Redis相当/メモリでもPoC可）
-  - [ ] **初回のみOK**、2回目以降は拒否
-  - [ ] デモで効く「使い捨てチケット」
+  - [ ] 署名検証（HS256 or RS256）
+  - [ ] `exp`（60秒超過でblocked）
+- [ ] one-time実行（**Firestore**）
+  - [ ] `jti` をFirestoreに登録（トランザクションで排他制御）
+  - [ ] 既に存在する場合は `already used` でblocked
+  - [ ] TTL用フィールド `ttl_at`（used_at + 10分）で自動削除
 
 **実行タスク**
 
@@ -355,6 +335,7 @@ Toolへの入口を Envoy に固定し、**JWTがないと到達不能**にす�
 
 **JWT検証タスク**
 
+- [ ] JWKSエンドポイントを参照（Judgmentの `/.well-known/jwks.json`）
 - [ ] Envoy で JWT検証を有効化（署名/exp/aud）
 - [ ] `aud` を `envoy-gateway` に固定（Judgmentで発行するaudと合わせる）
 - [ ] `scope` を見て許可するパスを絞る（可能なら）
@@ -378,6 +359,45 @@ Toolへの入口を Envoy に固定し、**JWTがないと到達不能**にす�
 - [ ] `GET/POST /tool/resident-info` を実装（ダミー応答でOK）
 - [ ] Envoyのみから到達できるようにする（できる範囲で）
 - [ ] Tool側で `Authorization` は検証しない（ブラックボックス前提）
+
+---
+
+### 3.6 JTI Store（Firestore）：one-time実行
+
+**目的**
+
+同じ `execution_handle` での二重実行を防止する。
+
+**タスク**
+
+- [ ] Firestoreプロジェクト設定（既存プロジェクトを使用）
+- [ ] コレクション `jti_store` を作成
+- [ ] TTLポリシー設定（`ttl_at` フィールド基準で自動削除）
+  ```bash
+  gcloud firestore fields ttls update ttl_at \
+    --collection-group=jti_store \
+    --enable-ttl
+  ```
+- [ ] Python SDK（google-cloud-firestore）をservice-aに追加
+- [ ] トランザクションによる排他制御を実装（8章「Firestore操作例」参照）
+
+**スキーマ**
+
+```json
+{
+  "jti": "uuid",
+  "used_at": "2026-01-27T01:23:45Z",
+  "expired_at": "2026-01-27T01:24:45Z",
+  "ttl_at": "2026-01-27T01:33:45Z"
+}
+```
+
+| フィールド | 説明 |
+|-----------|------|
+| `jti` | JWTのjtiクレーム（一意識別子）、ドキュメントIDとしても使用 |
+| `used_at` | 使用された日時 |
+| `expired_at` | JWTの有効期限（used_at + 60秒） |
+| `ttl_at` | Firestore TTL用（used_at + 10分） |
 
 ---
 
@@ -419,14 +439,17 @@ Context B: purpose=inquiry, time=night, data_sensitivity=high
 
 ### サービス一覧（拡張後）
 
-| サービス | 役割 | 備考 |
-|---------|------|------|
-| Judgment（service-a） | Agent + PEP + /authorize + /execute | 拡張 |
-| PDP（service-b） | OPA | 既存 |
-| Envoy（新規） | JWT検証 + Proxy | 新規追加 |
-| Tool API（service-c） | モック | 既存 |
-| judgment-ui | Judgment監査画面 | 既存 |
-| gov-ui | デモ用現場UI | 既存 |
+| サービス | 役割 | 技術 | GCPサービス | カスタムドメイン | 備考 |
+|---------|------|------|-------------|-----------------|------|
+| service-a | Judgment（/authorize + /execute + JWKS） | FastAPI | Cloud Run | https://service-a.action-gated.tech | 拡張 |
+| service-b | PDP（OPA） | OPA + Rego | Cloud Run | https://service-b.action-gated.tech | 既存 |
+| envoy-gateway | JWT検証 + Proxy | Envoy | Cloud Run | https://envoy-gateway.action-gated.tech | **新規** |
+| service-c | Tool API（モック） | FastAPI | Cloud Run | https://service-c.action-gated.tech | 既存 |
+| judgment-ui | Judgment監査画面 | Next.js | Cloud Run | https://judgment-ui.action-gated.tech | 既存 |
+| gov-ui | デモ用現場UI | Next.js | Cloud Run | https://gov-ui.action-gated.tech | 既存 |
+| jti-store | JTI Store（one-time検証） | - | Firestore | - | **新規** |
+
+**GCP情報**: リージョン `asia-northeast1`（東京）、ドメイン `action-gated.tech`
 
 ### ルーティング（固定する）
 
@@ -549,7 +572,7 @@ kid: 鍵ローテ用（余裕があれば）
 | `aud` | "envoy-gateway" |
 | `sub` | "agent-1" |
 | `jti` | "uuid" |
-| `exp` | UNIX time（短命：30s〜120s） |
+| `exp` | UNIX time（**60秒**） |
 | `iat` | UNIX time |
 | `scope` | "execute:get_resident_info" |
 | `req_id` | "uuid-..." |
@@ -560,29 +583,128 @@ kid: 鍵ローテ用（余裕があれば）
 |-------|------|
 | `ctx_hash` | contextのハッシュ（Context改ざん論点を潰すなら） |
 
+### JTI Store スキーマ（Firestore）
+
+**Firestore TTL: ttl_atを基準に自動削除**
+
+```json
+{
+  "jti": "uuid",
+  "used_at": "2026-01-27T01:23:45Z",
+  "expired_at": "2026-01-27T01:24:45Z",
+  "ttl_at": "2026-01-27T01:33:45Z"
+}
+```
+
+| フィールド | 説明 |
+|-----------|------|
+| `jti` | JWTのjtiクレーム（一意識別子） |
+| `used_at` | 使用された日時（ISO 8601） |
+| `expired_at` | JWTの有効期限（used_at + 60秒） |
+| `ttl_at` | Firestore TTL用（used_at + 10分）|
+
+### Firestore 操作例（Python）
+
+**セットアップ**
+
+```bash
+pip install google-cloud-firestore
+```
+
+**初期化**
+
+```python
+from google.cloud import firestore
+from datetime import datetime, timedelta, timezone
+
+db = firestore.Client()
+jti_collection = db.collection("jti_store")
+```
+
+**jti登録（使用済みとしてマーク）**
+
+```python
+def register_jti(jti: str, jwt_exp: datetime) -> bool:
+    """jtiを登録。既に存在する場合はFalseを返す"""
+    doc_ref = jti_collection.document(jti)
+
+    # トランザクションで排他制御
+    @firestore.transactional
+    def create_if_not_exists(transaction):
+        doc = doc_ref.get(transaction=transaction)
+        if doc.exists:
+            return False  # 既に使用済み
+
+        now = datetime.now(timezone.utc)
+        transaction.set(doc_ref, {
+            "jti": jti,
+            "used_at": now,
+            "expired_at": jwt_exp,
+            "ttl_at": now + timedelta(minutes=10)
+        })
+        return True
+
+    transaction = db.transaction()
+    return create_if_not_exists(transaction)
+```
+
+**jti確認（未使用かどうか）**
+
+```python
+def is_jti_unused(jti: str) -> bool:
+    """jtiが未使用ならTrue"""
+    doc = jti_collection.document(jti).get()
+    return not doc.exists
+```
+
+**使用例（/execute内）**
+
+```python
+# JWT検証後
+jti = decoded_jwt["jti"]
+jwt_exp = datetime.fromtimestamp(decoded_jwt["exp"], tz=timezone.utc)
+
+if not register_jti(jti, jwt_exp):
+    return {"status": "blocked", "reason": "execution_handle already used"}
+
+# Tool実行へ進む
+```
+
+**Firestore TTL設定（コンソールまたはgcloud）**
+
+```bash
+# TTLポリシーを設定（ttl_atフィールドを基準に自動削除）
+gcloud firestore fields ttls update ttl_at \
+  --collection-group=jti_store \
+  --enable-ttl
+```
+
 ---
 
 ## 9. スプリント例（実作業の順番）
 
-### Day 1：/authorize 完成
+### Day 1：/authorize + JWKS 完成
 
 - OPA query → allow/deny + reason → logging
-- execution_handle 発行
+- execution_handle（JWT）発行（exp=60秒）
+- JWKSエンドポイント `/.well-known/jwks.json` 実装
 
-### Day 2：/execute 検証完成
+### Day 2：/execute + Firestore 完成
 
-- JWT verify（Judgment内）
-- one-time（jtiストア）導入
+- JWT検証（署名/exp）
+- Firestore JTI Store 設定（TTLポリシー含む）
+- トランザクションによるone-time実行
 
 ### Day 3：Envoy Gateway 立ち上げ
 
-- proxy経路を作る（Judgment → Envoy → Tool）
-- EnvoyでJWT verify
+- Cloud Run でEnvoy起動
+- JWKSエンドポイント参照設定
+- JWT検証（sig/exp/aud）+ Proxy経路
 
 ### Day 4：デモ固め
 
 - Allow/Denyの2ケース
-- 期限切れ or 二重実行の「構造的強制力デモ」を追加
+- 構造的強制力デモ（期限切れ / 二重実行 / 改ざん）
 
 ### Day 5：監査ログ整形 & 図/記事素材
 

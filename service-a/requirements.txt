@@ -3,3 +3,6 @@ uvicorn
 httpx
 google-auth
 requests
+PyJWT
+cryptography
+google-cloud-firestore
