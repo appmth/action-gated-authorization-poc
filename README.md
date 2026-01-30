@@ -1,511 +1,131 @@
 # Action-Gated Authorization (AGA) - PoC
 
-AI Agent の Action を実行直前で必ず評価・制御する認可構造の最小PoCです。
+AI Agent の Action を実行直前で必ず評価・制御する認可構造（Action-Gated Authorization）の最小 PoC です。
 
-## TL;DR
-AI Agent の Action を実行直前で必ず評価・制御する
-認可構造（Action-Gated Authorization）の最小PoCです。
+## 概要
 
-👉 このPoCでは：
-- Agentが Action を生成
-- 実行前に必ず PEP で止まり
-- PDP が業務文脈を評価し
-- Allow / Deny と理由を返します
+この PoC では、AI Agent の行動を「アプリケーションの if 文」ではなく、「インフラ層（Envoy）での検証」と「中央集権的な認可サービス（Judgment）」によって構造的に制御します。
 
-## Folder Structure
+### 特徴
+- **2段認可**: Phase 1 (認可判定) と Phase 2 (実行要求) の分離。
+- **構造的強制力**: Envoy Gateway による JWT 検証と RBAC (scope 判定) の強制。
+- **完全性担保**: コンテキストのハッシュ化（ctx_hash）と多重実行防止（jti/Firestore）。
+- **Build Once, Run Anywhere**: 環境変数管理の一本化。
+
+## 設計ドキュメント
+
+詳細な設計については、以下のドキュメントを参照してください。
+- **[全体設計 (Architecture)](docs/02-design/05-architecture-diagram.md)**
+- **[インフラ・ネットワーク (DNS)](docs/02-design/06-infrastructure-network.md)**
+- **[シーケンス (Sequence Diagram)](docs/02-design/04-sequence-diagram.md)**
+- **[API 仕様 (OpenAPI)](docs/02-design/03-interface-spec.yaml)**
+- **[環境変数管理](docs/02-design/01-environment-management.md)**
+- **[構造的強制力の詳細](docs/02-design/02-structural-enforcement.md)**
+
+## ディレクトリ構造
 
 ```
 action-gated-authorization-poc/
-├── service-a/      # Agent + PEP（FastAPI）
-├── service-b/      # PDP（OPA）
-├── service-c/      # Tool mock / sandbox
-├── judgment-ui/    # Judgment UI（Next.js App Router）- 認可判定の監査画面
-│   ├── src/
-│   │   ├── app/    # App Router routes
-│   │   ├── components/
-│   │   └── lib/
-│   ├── public/
-│   └── package.json
-├── gov-ui/         # 行政問い合わせシステム（Next.js App Router）- デモ用現場UI
-│   ├── src/
-│   │   └── app/
-│   │       ├── inquiry/    # GOV-01: 問い合わせ対応画面
-│   │       └── residents/  # GOV-02: 住民データ閲覧画面
-│   └── package.json
-├── infra/          # Infrastructure setup
-├── logs/           # Execution logs
-├── demo/           # Demo scenarios and examples
-├── diagrams/       # Architecture diagrams
-└── docs/           # Documentation
-    └── 01-plan/    # Implementation plans & guides
+├── envoy-gateway/  # Envoy Gateway (JWT Auth & RBAC)
+├── service-a/      # Judgment Service (PEP: /authorize, /execute)
+├── service-b/      # PDP: OPA (Policy Decision Point)
+├── service-c/      # Tool API (Mock: /resident-info)
+├── judgment-ui/    # 認可判定の監査画面 (Next.js)
+├── gov-ui/         # デモ用行政 UI (Next.js)
+├── scripts/        # 共通起動・デプロイスクリプト
+└── docs/
+    ├── 01-plan/    # 過去の計画・検討資料 (Historical)
+    └── 02-design/  # 最新の設計ドキュメント
 ```
 
-## Demo (30 seconds)
-[demo.mp4]
+## ローカル開発環境の起動
 
-## Background
-- なぜ Agent 時代に認可が壊れるのか
-- なぜ業務フローに埋め込めないのか
+Docker Compose を使用して、全サービスをワンコマンドで起動するのが最も推奨される方法です。
 
-## Architecture
-[architecture.png]
+### 前提: Firestore Emulator の起動
 
-## How it works
-1. Agent generates Action
-2. Action goes through PEP
-3. PDP evaluates context
-4. Decision & reason are logged
-
-## Local Development
-
-### Judgment UI (Next.js) - 認可判定の監査画面
+二重実行防止（JTI Store）を動作させるには、**先に** ホストマシンで Firebase Emulator を起動してください。
 
 ```bash
-cd judgment-ui
+# 初回のみ: Firebase CLI のインストール
+npm install -g firebase-tools
 
-# 初回のみ: Next.js プロジェクトを初期化
-npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"
-
-# 環境変数を設定
-cp .env.local.example .env.local
-
-# 開発サーバー起動
-npm run dev
+# Firestore Emulator の起動 (ポート 8080)
+firebase emulators:start --only firestore
 ```
 
-- http://localhost:3000 でアクセス
-- 詳細は `docs/01-plan/03-nextjs-catchup-guide.md` を参照
+> [!NOTE]
+> Apple Silicon (M1/M2/M3) では、Docker 内で Firestore Emulator を動かすより、ホストで直接実行する方が高速で安定します。
 
-### Gov UI (Next.js) - 行政問い合わせシステム（デモ用現場UI）
+### 推奨: Docker Compose での起動
 
 ```bash
-cd gov-ui
+# 全サービスの起動 (ビルド含む)
+./scripts/deploy.sh local
 
-# 環境変数を設定
-cp .env.local.example .env.local
-
-# 開発サーバー起動（ポート3001）
-npm run dev
+# サービスの停止
+./scripts/deploy.sh local down
 ```
 
-- http://localhost:3001 でアクセス
-- `/inquiry` - GOV-01: 問い合わせ対応画面
-- `/residents` - GOV-02: 住民データ閲覧画面
+起動後、以下のポートで各サービスにアクセス可能です。
+- **Judgment (service-a)**: http://localhost:8080
+- **OPA (service-b)**: http://localhost:8181
+- **Tool (service-c)**: http://localhost:8082
+- **Envoy Gateway**: http://localhost:10000
+- **Firestore Emulator**: http://localhost:8080 (ホストで別途起動)
+- **Judgment UI**: http://localhost:3000
+- **Gov UI**: http://localhost:3001
 
-#### デモシナリオ
+## 動作確認 (API テスト)
 
-1. **gov-ui** と **judgment-ui** を並べて同時起動
-2. gov-ui の `/inquiry` で「問い合わせを処理」ボタンを押す
-3. gov-ui の `/residents` で「見てはいけないデータ」を確認
-4. judgment-ui のダッシュボードで判定ログを確認
-
-**ポイント**: gov-ui では AI Agent の内部判断やデータアクセス内容は確認できない。Judgment がない世界の危険性を示す。
-
-### 1. service-b（OPA/PDP）を起動
-
-service-a は PDP（OPA）に認可判断を問い合わせるため、**先に service-b を起動する必要があります**。
-
+### 1. 認可判定要求 (Phase 1)
 ```bash
-cd service-b
-
-# Docker を使う場合（コンテナ内は8080、ホストは8181にマッピング）
-docker build -t aga-pdp:local .
-docker run --rm -p 8181:8080 --name aga-pdp aga-pdp:local
-
-# または OPA を直接使う場合
-opa run --server --addr :8181 policy/
-```
-
-OPA が起動したら確認:
-
-```bash
-curl http://localhost:8181/health
-```
-
-### 2. service-a（Agent + PEP）を起動
-
-```bash
-cd service-a
-
-# venv作成・有効化
-python3 -m venv .venv
-source .venv/bin/activate
-
-# 依存関係インストール
-pip install -r requirements.txt
-
-# 起動
-uvicorn main:app --reload --host 0.0.0.0 --port 8080
-```
-
-### 3. service-c（Tool mock）を起動
-
-Allow 時に Tool 呼び出しを成功させるため、service-c を起動します。
-
-```bash
-cd service-c
-
-# venv作成・有効化
-python3 -m venv .venv
-source .venv/bin/activate
-
-# 依存関係インストール
-pip install -r requirements.txt
-
-# 起動
-uvicorn main:app --reload --host 0.0.0.0 --port 8082
-```
-
-service-c が起動したら確認:
-
-```bash
-curl http://localhost:8082/health
-# => {"status":"healthy"}
-```
-
-### 4. 動作確認
-
-**重要**:
-- service-b（OPA）が起動していないと、service-a は 503 エラーを返します
-- service-c（Tool mock）が起動していないと、Allow 時に Tool 呼び出しが失敗します
-
-#### service-a エンドポイント一覧
-
-| エンドポイント | 用途 | リクエスト形式 |
-|---------------|------|---------------|
-| `POST /v1/actions/get_resident_info` | 直接 Action 実行 | `{ "context": {...} }` |
-| `POST /v1/agent/plan-and-act` | Agent Plan 生成→実行 | `{ "request": "自然言語" }` |
-| `GET /judgments` | Judgment 一覧取得 | - |
-| `GET /judgments/{request_id}` | Judgment 詳細取得 | - |
-
-#### 現在のポリシー（service-b）
-
-| purpose | time | 結果 |
-|---------|------|------|
-| `inquiry` | `business_hours` | **Allow** |
-| それ以外 | - | Deny |
-
-#### テストコマンド
-
-```bash
-# Allow パターン（purpose=inquiry, time=business_hours）
-curl -sS -X POST http://localhost:8080/v1/actions/get_resident_info \
+curl -sX POST http://localhost:8080/authorize \
   -H "Content-Type: application/json" \
   -d '{
+    "agent_id": "agent-001",
+    "action": "get_resident_info",
     "context": {
       "purpose": "inquiry",
       "time": "business_hours",
-      "data_sensitivity": "required"
+      "data_sensitivity": "high"
     }
   }' | jq
+```
+レスポンスの `execution_handle` (JWT) を取得します。
 
-# Deny パターン（purpose=marketing は許可されない）
-curl -sS -X POST http://localhost:8080/v1/actions/get_resident_info \
+### 2. 実行要求 (Phase 2)
+取得した JWT を使用して実行を依頼します（Judgment が Envoy 経由で Tool を呼び出します）。
+```bash
+# JWT 部分を取得した値に置き換えてください
+curl -sX POST http://localhost:8080/execute \
   -H "Content-Type: application/json" \
   -d '{
-    "context": {
-      "purpose": "marketing",
-      "time": "business_hours",
-      "data_sensitivity": "required"
-    }
+    "execution_handle": "YOUR_JWT_HERE",
+    "parameters": {}
   }' | jq
-
-# Deny パターン（業務時間外）
-curl -sS -X POST http://localhost:8080/v1/actions/get_resident_info \
-  -H "Content-Type: application/json" \
-  -d '{
-    "context": {
-      "purpose": "inquiry",
-      "time": "after_hours",
-      "data_sensitivity": "required"
-    }
-  }' | jq
-
-# Judgment 一覧取得
-curl -sS http://localhost:8080/judgments | jq
 ```
 
-### Docker を使う場合 (OPA/PDP)
+## デプロイ (Google Cloud)
+
+`scripts/deploy.sh` を使用して、Cloud Run に各コンポーネントをデプロイできます。
 
 ```bash
-cd service-b
+# 特定のサービスをデプロイ
+./scripts/deploy.sh prod service-a
 
-# ビルド
-docker build -t aga-pdp:local .
-
-# 実行（コンテナ内は8080、ホストは8181にマッピング）
-docker run --rm -p 8181:8080 --name aga-pdp aga-pdp:local
+# 全バックエンドサービスを一括デプロイ
+./scripts/deploy.sh prod all
 ```
 
-## Deploy to Cloud Run
+> [!NOTE]
+> デプロイ前に `.env.prod` の内容が正しいことを確認してください。
 
-各サービスをCloud Runにデプロイするには、以下の順序で実行します。
+## 開発者向け情報
 
-### ドメイン名の対応表（DNS）
+### 手動起動 (個別サービス)
+各ディレクトリで以下のコマンドを使用して個別起動も可能です。
+- **Python**: `python -m uvicorn main:app --port XXXX`
+- **Next.js**: `npm run dev`
 
-| サービス | カスタムドメイン | Cloud Run URL | 備考 |
-|---|---|---|---|
-| judgment-ui | `https://judgment-ui.action-gated.tech` | `https://judgment-ui-374053446416.asia-northeast1.run.app` | 認可判定の監査画面 |
-| gov-ui | `https://gov-ui.action-gated.tech` | `https://gov-ui-374053446416.asia-northeast1.run.app` | 行政問い合わせシステム（デモ用） |
-| service-a | `https://service-a.action-gated.tech` | `https://service-a-374053446416.asia-northeast1.run.app` | Judgment (PEP): /authorize + /execute |
-| service-b | `https://service-b.action-gated.tech` | `https://service-b-374053446416.asia-northeast1.run.app` | PDP (OPA) |
-| service-c | `https://service-c.action-gated.tech` | `https://service-c-374053446416.asia-northeast1.run.app` | Tool mock |
-| envoy-gateway | `https://envoy-gateway.action-gated.tech` | `https://envoy-gateway-374053446416.asia-northeast1.run.app` | JWT検証 + Tool Proxy |
-
-### 1. service-b（OPA/PDP）をデプロイ
-
-```bash
-cd service-b
-gcloud run deploy service-b \
-  --source . \
-  --region asia-northeast1 \
-  --allow-unauthenticated \
-  --min-instances 0 \
-  --max-instances 5 \
-  --port 8080
-```
-
-デプロイ後、出力されるURLをメモしておきます（例: `https://service-b.action-gated.tech`）
-
-### 2. service-c（Tool mock）をデプロイ
-
-```bash
-cd service-c
-gcloud run deploy service-c \
-  --source . \
-  --region asia-northeast1 \
-  --allow-unauthenticated \
-  --min-instances 0 \
-  --max-instances 5
-```
-
-デプロイ後、出力されるURLをメモしておきます（例: `https://service-c.action-gated.tech`）
-
-### 3. service-a（Agent + PEP）をデプロイ
-
-service-b と service-c のURLを環境変数に設定します。
-
-```bash
-cd service-a
-gcloud run deploy service-a \
-  --source . \
-  --region asia-northeast1 \
-  --allow-unauthenticated \
-  --min-instances 0 \
-  --max-instances 5 \
-  --set-env-vars PDP_URL=https://service-b.action-gated.tech,TOOL_URL=https://service-c.action-gated.tech
-```
-
-> **Note**: `PDP_URL` にはベースURLのみを指定。パス (`/v1/data/authorization/decision`) はコード側で付与されます。
-
-### 4. judgment-ui（Next.js）をデプロイ
-
-```bash
-cd judgment-ui
-gcloud run deploy judgment-ui \
-  --source . \
-  --allow-unauthenticated \
-  --set-env-vars NEXT_PUBLIC_API_URL=https://service-a.action-gated.tech
-```
-
-> **Note**: `package.json` の `start` スクリプトで `PORT` 環境変数を使用するため、Dockerfile不要でソースからデプロイ可能。
-
-### 5. gov-ui（Next.js）をデプロイ
-
-```bash
-cd gov-ui
-gcloud run deploy gov-ui \
-  --source . \
-  --region asia-northeast1 \
-  --allow-unauthenticated \
-  --min-instances 0 \
-  --max-instances 5 \
-  --set-env-vars NEXT_PUBLIC_API_URL=https://service-a.action-gated.tech
-```
-
-### 6. envoy-gateway（Envoy Proxy）をデプロイ
-
-```bash
-cd envoy-gateway
-gcloud run deploy envoy-gateway \
-  --source . \
-  --region asia-northeast1 \
-  --allow-unauthenticated \
-  --min-instances 0 \
-  --max-instances 5 \
-  --set-env-vars SERVICE_A_HOST=service-a.action-gated.tech,\
-SERVICE_A_PORT=443,\
-SERVICE_C_HOST=service-c.action-gated.tech,\
-SERVICE_C_PORT=443,\
-JWKS_URI=https://service-a.action-gated.tech/.well-known/jwks.json,\
-UPSTREAM_TLS_SERVICE_A='transport_socket: { name: envoy.transport_sockets.tls, typed_config: { "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext, sni: service-a.action-gated.tech } }',\
-UPSTREAM_TLS_SERVICE_C='transport_socket: { name: envoy.transport_sockets.tls, typed_config: { "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext, sni: service-c.action-gated.tech } }'
-```
-
-> **Note**: Envoy は環境変数に応じて起動時に `envoy.yaml` を生成（`envsubst`）し、動的に接続先を切り替えます。
-
-### オプション説明
-
-| オプション | 説明 |
-|-----------|------|
-| `--source .` | 現在のディレクトリからビルド |
-| `--allow-unauthenticated` | 認証なしでアクセス可能（PoC用） |
-| `--region asia-northeast1` | 東京リージョン |
-| `--min-instances 0` | 最小インスタンス数（コスト最適化） |
-| `--max-instances 5` | 最大インスタンス数 |
-| `--port 8080` | OPAがリッスンするポート |
-| `--set-env-vars` | 環境変数を設定 |
-
-## 動作確認
-
-### service-b (OPA/PDP) のテスト
-
-```bash
-# Allow ケース: inquiry + business_hours + data_sensitivity=required
-curl -s -X POST "https://service-b.action-gated.tech/v1/data/authorization/decision" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "action": "get_resident_info",
-      "context": {
-        "purpose": "inquiry",
-        "time": "business_hours",
-        "data_sensitivity": "required"
-      }
-    }
-  }' | jq
-# => {"result":{"allow":true,"reason":"Allowed: inquiry during business hours"}}
-
-# Deny ケース: purpose が inquiry 以外
-curl -s -X POST "https://service-b.action-gated.tech/v1/data/authorization/decision" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "action": "get_resident_info",
-      "context": {
-        "purpose": "marketing",
-        "time": "business_hours",
-        "data_sensitivity": "required"
-      }
-    }
-  }' | jq
-# => {"result":{"allow":false,"reason":"Denied: purpose must be 'inquiry'"}}
-
-# Deny ケース: 業務時間外
-curl -s -X POST "https://service-b.action-gated.tech/v1/data/authorization/decision" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "action": "get_resident_info",
-      "context": {
-        "purpose": "inquiry",
-        "time": "after_hours",
-        "data_sensitivity": "required"
-      }
-    }
-  }' | jq
-# => {"result":{"allow":false,"reason":"Denied: access allowed only during business hours"}}
-```
-
-### service-a のテスト
-
-```bash
-# Allow ケース
-curl -s -X POST "https://service-a.action-gated.tech/v1/actions/get_resident_info" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "context": {
-      "purpose": "inquiry",
-      "time": "business_hours",
-      "data_sensitivity": "required"
-    }
-  }' | jq
-# => {"request_id":"...","action":"get_resident_info","allowed":true,"reason":"Allowed: inquiry during business hours","data":{...}}
-
-# Deny ケース
-curl -s -X POST "https://service-a.action-gated.tech/v1/actions/get_resident_info" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "context": {
-      "purpose": "marketing",
-      "time": "business_hours",
-      "data_sensitivity": "required"
-    }
-  }' | jq
-# => {"detail":{"request_id":"...","action":"get_resident_info","allowed":false,"reason":"Denied: purpose must be 'inquiry'"}}
-
-# Judgment 一覧取得
-curl -s "https://service-a.action-gated.tech/judgments" | jq
-# => [{"request_id":"...","action":"get_resident_info","result":"ALLOW","reason_short":"...","created_at":"..."}]
-```
-
-### service-c (Tool mock) のテスト
-
-```bash
-# ヘルスチェック
-curl -s "https://service-c.action-gated.tech/health"
-# => {"status":"healthy"}
-```
-
-### judgment-ui のテスト
-
-```bash
-# ヘルスチェック（Next.js トップページ）
-curl -s -o /dev/null -w "%{http_code}" "https://judgment-ui.action-gated.tech/"
-# => 200
-
-# ダッシュボードページ
-curl -s -o /dev/null -w "%{http_code}" "https://judgment-ui.action-gated.tech/dashboard"
-# => 200
-```
-
-ブラウザで確認:
-- https://judgment-ui.action-gated.tech/dashboard
-
-### gov-ui のテスト
-
-```bash
-# 問い合わせ対応画面
-curl -s -o /dev/null -w "%{http_code}" "https://gov-ui.action-gated.tech/inquiry"
-# => 200
-
-# 住民データ閲覧画面
-curl -s -o /dev/null -w "%{http_code}" "https://gov-ui.action-gated.tech/residents"
-# => 200
-```
-
-ブラウザで確認:
-- https://gov-ui.action-gated.tech/inquiry
-- https://gov-ui.action-gated.tech/residents
-
-## Policy Example
-```yaml
-- if: time == "night" and action.contains_pii
-  deny: true
-```
-
-## Claude Code Tips
-
-### セッション管理
-
-```bash
-# 直前のセッションを続ける（最も最近のセッションを自動選択）
-claude --continue
-
-# 過去のセッションを選んで再開（対話的に選択）
-claude --resume
-```
-
-- `--continue`: 直前の会話をそのまま続行。作業を中断して再開したいときに便利
-- `--resume`: 過去のセッション一覧から選んで再開。複数のプロジェクトを行き来するときに便利
-
-### セッション中のコマンド
-
-```
-/stats
-```
-
-現在のセッションの統計情報を表示:
-- トークン使用量（入力/出力）
-- コスト概算
-- セッション時間
+詳細は各ディレクトリ内のソースコード、または `docs/01-plan` 内の過去資料を参照してください。

@@ -1,0 +1,16 @@
+# OPA Configuration Template
+# This file is processed by envsubst at startup
+
+services:
+  # Placeholder for central management if needed in future
+
+labels:
+  environment: "${ENVIRONMENT}"
+  app: "action-gated-authorization"
+
+logging:
+  level: "${OPA_LOG_LEVEL}"
+  format: "${OPA_LOG_FORMAT}"
+
+decision_logs:
+  console: true

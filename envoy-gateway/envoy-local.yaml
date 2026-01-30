@@ -1,3 +1,9 @@
+# ===========================================
+# Envoy Gateway - Local Development Config
+# ===========================================
+# TLS disabled for local docker-compose environment
+# Uses container names for service discovery
+
 static_resources:
   listeners:
     - name: listener_0
@@ -47,7 +53,6 @@ static_resources:
                           route:
                             cluster: service_c
                             prefix_rewrite: "/resident-info"
-                            host_rewrite_literal: ${SERVICE_C_HOST}
                           request_headers_to_add:
                             - header:
                                 key: "X-Tool-Api-Key"
@@ -58,7 +63,6 @@ static_resources:
                           route:
                             cluster: service_c
                             prefix_rewrite: "/execute"
-                            host_rewrite_literal: ${SERVICE_C_HOST}
                           request_headers_to_add:
                             - header:
                                 key: "X-Tool-Api-Key"
@@ -69,7 +73,6 @@ static_resources:
                           route:
                             cluster: service_c
                             prefix_rewrite: "/"
-                            host_rewrite_literal: ${SERVICE_C_HOST}
                           request_headers_to_add:
                             - header:
                                 key: "X-Tool-Api-Key"
@@ -86,7 +89,7 @@ static_resources:
                             - "envoy-gateway"
                           remote_jwks:
                             http_uri:
-                              uri: "${JWKS_URI}"
+                              uri: "http://service-a:8080/.well-known/jwks.json"
                               cluster: service_a_jwks
                               timeout: 5s
                             cache_duration: 300s
@@ -117,7 +120,12 @@ static_resources:
                         policies:
                           "resident-info-policy":
                             permissions:
-                              - header: { name: ":path", string_match: { prefix: "/tool/resident-info" } }
+                              - header:
+                                  {
+                                    name: ":path",
+                                    string_match:
+                                      { prefix: "/tool/resident-info" },
+                                  }
                             principals:
                               - metadata:
                                   filter: "envoy.filters.http.jwt_authn"
@@ -129,23 +137,30 @@ static_resources:
                                       exact: "execute:get_resident_info"
                           "other-tools":
                             permissions:
-                              - header: { name: ":path", string_match: { prefix: "/tool/execute" } }
+                              - header:
+                                  {
+                                    name: ":path",
+                                    string_match: { prefix: "/tool/execute" },
+                                  }
                             principals:
                               - any: true
                           "public":
                             permissions:
-                              - header: { name: ":path", string_match: { prefix: "/health" } }
+                              - header:
+                                  {
+                                    name: ":path",
+                                    string_match: { prefix: "/health" },
+                                  }
                             principals:
                               - any: true
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 
-
-
   clusters:
+    # service-c: Tool Executor (HTTP, no TLS)
     - name: service_c
-      type: LOGICAL_DNS
+      type: STRICT_DNS
       dns_lookup_family: V4_ONLY
       load_assignment:
         cluster_name: service_c
@@ -154,16 +169,12 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: ${SERVICE_C_HOST}
-                      port_value: ${SERVICE_C_PORT}
-      transport_socket:
-        name: envoy.transport_sockets.tls
-        typed_config:
-          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
-          sni: ${SERVICE_C_HOST}
+                      address: service-c
+                      port_value: 8080
 
+    # service-a: JWKS endpoint (HTTP, no TLS)
     - name: service_a_jwks
-      type: LOGICAL_DNS
+      type: STRICT_DNS
       dns_lookup_family: V4_ONLY
       load_assignment:
         cluster_name: service_a_jwks
@@ -172,10 +183,5 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: ${SERVICE_A_HOST}
-                      port_value: ${SERVICE_A_PORT}
-      transport_socket:
-        name: envoy.transport_sockets.tls
-        typed_config:
-          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
-          sni: ${SERVICE_A_HOST}
+                      address: service-a
+                      port_value: 8080

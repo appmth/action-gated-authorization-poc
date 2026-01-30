@@ -1,0 +1,208 @@
+openapi: 3.0.3
+info:
+  title: Action Gated Authorization API
+  description: AI Agent の行動を認可・保護・実行するための API 仕様書
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: ローカル開発環境 (Judgment)
+  - url: https://envoy-gateway.action-gated.tech
+    description: 本番環境 (Envoy Gateway 経由)
+
+paths:
+  /authorize:
+    post:
+      summary: 認可判定要求
+      description: PDP (OPA) に問い合わせを行い、認可された場合は実行用チケット (JWT) を発行します。
+      tags:
+        - Judgment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorizeRequest"
+      responses:
+        "200":
+          description: 判定結果（Allow/Deny）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizeResponse"
+
+  /execute:
+    post:
+      summary: ツール実行要求
+      description: |
+        発行された execution_handle (JWT) を検証し、指定した Tool を実行します。
+        tool_request でリクエスト情報（method, path, body）を指定できます。
+        JWT の scope と path の整合性が検証され、不一致の場合は 403 Forbidden が返されます。
+      tags:
+        - Judgment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExecuteRequest"
+      responses:
+        "200":
+          description: 実行結果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecuteResponse"
+        "400":
+          description: 不正なリクエスト（チケット使用済みなど）
+        "403":
+          description: 認可エラー（scope と path の不一致）
+
+  /.well-known/jwks.json:
+    get:
+      summary: 公開鍵取得 (JWKS)
+      description: Judgment が発行する JWT の署名検証用公開鍵を提供します。Envoy 等のコンポーネントが自動的に参照します。
+      tags:
+        - Identity
+      responses:
+        "200":
+          description: JWKS データ
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /tool/resident-info:
+    post:
+      summary: 住民情報取得 (Tool)
+      description: |
+        本エンドポイントは Envoy Gateway によって保護されています。
+        呼出には `scope: execute:get_resident_info` を含んだ JWT が必要です。
+      tags:
+        - Tool
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                request_id:
+                  type: string
+                action:
+                  type: string
+                  example: get_resident_info
+      responses:
+        "200":
+          description: 住民データ
+        "401":
+          description: 未認証
+        "403":
+          description: 認可エラー (Scope 不足)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuthorizeRequest:
+      type: object
+      required:
+        - agent_id
+        - action
+        - context
+      properties:
+        agent_id:
+          type: string
+          example: "agent-001"
+        action:
+          type: string
+          example: "get_resident_info"
+        context:
+          type: object
+          properties:
+            purpose:
+              type: string
+              example: "inquiry"
+            time:
+              type: string
+              example: "2024-01-01T10:00:00Z"
+            data_sensitivity:
+              type: string
+              example: "high"
+        request_id:
+          type: string
+          format: uuid
+
+    AuthorizeResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        decision:
+          type: string
+          enum: [allow, deny]
+        reason:
+          type: string
+        execution_handle:
+          type: string
+          description: 認可チケット (JWT)
+        expires_in_seconds:
+          type: integer
+          example: 60
+
+    ExecuteRequest:
+      type: object
+      required:
+        - execution_handle
+        - tool_request
+      properties:
+        request_id:
+          type: string
+        execution_handle:
+          type: string
+          description: 認可チケット (JWT)
+        tool_request:
+          $ref: "#/components/schemas/ToolRequest"
+        parameters:
+          type: object
+          deprecated: true
+          description: 非推奨。tool_request.body を使用してください。
+
+    ToolRequest:
+      type: object
+      description: Tool API に送信するリクエスト情報
+      required:
+        - path
+      properties:
+        method:
+          type: string
+          enum: [GET, POST, PUT, DELETE]
+          default: POST
+          description: HTTP メソッド
+        path:
+          type: string
+          example: "/resident-info"
+          description: |
+            Tool API のパス。JWT の scope と整合性が検証されます。
+            例: scope が "execute:get_resident_info" の場合、"/resident-info" のみ許可されます。
+        body:
+          type: object
+          description: リクエストボディ
+
+    ExecuteResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        status:
+          type: string
+          enum: [success, error, blocked]
+        result:
+          type: object
+        reason:
+          type: string

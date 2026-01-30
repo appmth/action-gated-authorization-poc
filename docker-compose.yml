@@ -1,0 +1,117 @@
+# ===========================================
+# AGA PoC - Local Development
+# ===========================================
+# Usage:
+#   docker-compose --env-file .env.local up -d --build
+#   docker-compose down
+#
+# Or use the deploy script:
+#   ./scripts/deploy.sh local
+#   ./scripts/deploy.sh local down
+
+version: '3.8'
+
+services:
+  # ------------------------------------------
+  # service-a: Judgment (PEP)
+  # ------------------------------------------
+  service-a:
+    build:
+      context: ./service-a
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PDP_URL=${PDP_URL:-http://service-b:8080}
+      - TOOL_URL=${TOOL_URL:-http://service-c:8080}
+      - ENVOY_URL=${ENVOY_URL:-http://envoy-gateway:8080}
+      - FIRESTORE_EMULATOR_HOST=firestore-emulator:8080
+      - GOOGLE_CLOUD_PROJECT=aga-poc
+      - VERTEX_PROJECT=${VERTEX_PROJECT:-}
+      - VERTEX_LOCATION=${VERTEX_LOCATION:-asia-northeast1}
+      - VERTEX_MODEL=${VERTEX_MODEL:-gemini-2.0-flash}
+    depends_on:
+      - service-b
+      - service-c
+      - firestore-emulator
+    networks:
+      - aga-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ------------------------------------------
+  # service-b: PDP (OPA)
+  # ------------------------------------------
+  service-b:
+    build:
+      context: ./service-b
+      dockerfile: Dockerfile
+    ports:
+      - "8181:8080"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-local}
+      - OPA_LOG_LEVEL=${OPA_LOG_LEVEL:-info}
+      - OPA_LOG_FORMAT=${OPA_LOG_FORMAT:-text}
+    networks:
+      - aga-network
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ------------------------------------------
+  # service-c: Tool Executor
+  # ------------------------------------------
+  service-c:
+    build:
+      context: ./service-c
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8080"
+    environment:
+      - TOOL_API_KEY=${TOOL_API_KEY:-local-dev-key-12345}
+    networks:
+      - aga-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ------------------------------------------
+  # envoy-gateway: JWT Validation + Proxy
+  # ------------------------------------------
+  envoy-gateway:
+    build:
+      context: ./envoy-gateway
+      dockerfile: Dockerfile.local
+    ports:
+      - "10000:8080"
+    environment:
+      - TOOL_API_KEY=${TOOL_API_KEY:-local-dev-key-12345}
+    depends_on:
+      - service-a
+      - service-c
+    networks:
+      - aga-network
+
+  # ------------------------------------------
+  # firestore-emulator: Local Firestore for JTI Store
+  # ------------------------------------------
+  firestore-emulator:
+    image: mtlynch/firestore-emulator
+    ports:
+      - "8086:8080"
+    environment:
+      - FIRESTORE_PROJECT_ID=aga-poc
+      - PORT=8080
+    networks:
+      - aga-network
+
+networks:
+  aga-network:
+    driver: bridge

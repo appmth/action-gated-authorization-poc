@@ -63,6 +63,12 @@ def generate_idempotency_key(request_id: str, action: str) -> str:
     """idempotency key を生成（二重実行防止用）"""
     return hashlib.sha256(f"{request_id}:{action}".encode()).hexdigest()[:32]
 
+
+def generate_ctx_hash(context: dict) -> str:
+    """Context 改ざん防止用ハッシュを生成"""
+    ctx_str = json.dumps(context, sort_keys=True)
+    return hashlib.sha256(ctx_str.encode()).hexdigest()
+
 # PDP_URL はベースURLのみ（パスはコード側で付与）
 PDP_BASE_URL = os.getenv("PDP_URL", "http://localhost:8181")
 PDP_DECISION_PATH = "/v1/data/authorization/decision"
@@ -150,10 +156,18 @@ def get_jwks():
     }
 
 
+class ToolRequest(BaseModel):
+    """Tool API に送信するリクエスト情報"""
+    method: str = "POST"
+    path: str
+    body: dict = Field(default_factory=dict)
+
+
 class ExecuteRequest(BaseModel):
     request_id: str
     execution_handle: str
-    parameters: dict
+    tool_request: ToolRequest
+    parameters: dict | None = None  # 非推奨、後方互換性のため残す
 
 
 class ExecuteResponse(BaseModel):
@@ -163,6 +177,18 @@ class ExecuteResponse(BaseModel):
     reason: str | None = None
 
 
+# scope と path のマッピング
+SCOPE_TO_PATHS = {
+    "execute:get_resident_info": ["/resident-info"],
+}
+
+
+def validate_path_for_scope(scope: str, path: str) -> bool:
+    """scope と path の整合性を検証"""
+    allowed_paths = SCOPE_TO_PATHS.get(scope, [])
+    if not allowed_paths:
+        return False
+    return any(path.startswith(p) for p in allowed_paths)
 # Firestore Client (Lazy Initialization)
 _db = None
 _jti_collection = None
@@ -172,7 +198,21 @@ def get_firestore_client():
     """Firestore クライアントを遅延初期化で取得"""
     global _db, _jti_collection
     if _db is None:
-        _db = firestore.Client()
+        # エミュレータ使用時はプロジェクトIDを明示的に指定
+        # FIRESTORE_EMULATOR_HOST が設定されている場合、SDK は自動的にエミュレータに接続
+        emulator_host = os.getenv("FIRESTORE_EMULATOR_HOST")
+        project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "aga-poc")
+        
+        if emulator_host:
+            # エミュレータ使用時: 認証不要、プロジェクトIDを明示的に指定
+            from google.auth.credentials import AnonymousCredentials
+            _db = firestore.Client(project=project_id, credentials=AnonymousCredentials())
+            log_event(phase="firestore_init", request_id="system", reason=f"emulator:{emulator_host}")
+        else:
+            # 本番: ADC を使用
+            _db = firestore.Client(project=project_id)
+            log_event(phase="firestore_init", request_id="system", reason="production")
+        
         _jti_collection = _db.collection("jti_store")
     return _db, _jti_collection
 
@@ -209,6 +249,8 @@ class ActionRequest(BaseModel):
 class PDPResponse(BaseModel):
     allow: bool
     reason: str
+    policy_id: str | None = None
+    tags: list[str] = []
 
 
 app = FastAPI()
@@ -352,18 +394,14 @@ async def call_tool(
 
 async def call_tool_via_envoy(
     request_id: str,
-    action: str,
-    context: dict,
+    tool_request: ToolRequest,
     execution_handle: str,
 ) -> ToolResult:
     """Tool を Envoy Gateway 経由で呼び出す（構造的強制力）"""
-    payload = {
-        "request_id": request_id,
-        "action": action,
-        "context": context,
-    }
-    endpoint = f"{ENVOY_URL}/tool/execute"
-    method = "POST"
+    # tool_request.path からエンドポイントを構築
+    # path は /resident-info のような形式なので /tool を付与
+    endpoint = f"{ENVOY_URL}/tool{tool_request.path}"
+    method = tool_request.method.upper()
     headers = {
         "Authorization": f"Bearer {execution_handle}",
         "X-Request-Id": request_id,
@@ -372,12 +410,20 @@ async def call_tool_via_envoy(
     start = time.perf_counter()
     try:
         async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                endpoint,
-                json=payload,
-                headers=headers,
-                timeout=10.0,
-            )
+            if method == "GET":
+                resp = await client.get(
+                    endpoint,
+                    headers=headers,
+                    timeout=10.0,
+                )
+            else:
+                resp = await client.request(
+                    method,
+                    endpoint,
+                    json=tool_request.body,
+                    headers=headers,
+                    timeout=10.0,
+                )
             latency_ms = (time.perf_counter() - start) * 1000
             if resp.status_code >= 400:
                 return ToolResult(
@@ -535,6 +581,8 @@ async def call_pdp(action: str, context: dict) -> PDPResponse:
             return PDPResponse(
                 allow=result.get("allow", False),
                 reason=result.get("reason", "No reason provided"),
+                policy_id=result.get("policy_id"),
+                tags=result.get("tags", []),
             )
     except httpx.TimeoutException:
         raise PDPError("Denied: policy engine unavailable (timeout)")
@@ -569,7 +617,7 @@ async def authorize(request: AuthorizeRequest):
     context_dict = request.context.model_dump()
     
     log_event(
-        phase="authz_request",
+        phase="AUTHZ_REQUEST",
         request_id=request_id,
         action=request.action,
         context=context_dict,
@@ -592,6 +640,7 @@ async def authorize(request: AuthorizeRequest):
                 "iat": int(now.timestamp()),
                 "scope": f"execute:{request.action}",
                 "req_id": request_id,
+                "ctx_hash": generate_ctx_hash(context_dict),
             }
             
             # Sign JWT
@@ -603,10 +652,15 @@ async def authorize(request: AuthorizeRequest):
             )
             
             log_event(
-                phase="authz_decision",
+                phase="AUTHZ_DECISION",
                 request_id=request_id,
                 action=request.action,
-                decision={"allow": True, "reason": decision.reason},
+                decision={
+                    "allow": True,
+                    "reason": decision.reason,
+                    "policy_id": decision.policy_id,
+                    "tags": decision.tags,
+                },
                 reason=decision.reason,
             )
             
@@ -619,10 +673,15 @@ async def authorize(request: AuthorizeRequest):
             )
         else:
             log_event(
-                phase="authz_decision",
+                phase="AUTHZ_DECISION",
                 request_id=request_id,
                 action=request.action,
-                decision={"allow": False, "reason": decision.reason},
+                decision={
+                    "allow": False,
+                    "reason": decision.reason,
+                    "policy_id": decision.policy_id,
+                    "tags": decision.tags,
+                },
                 reason=decision.reason,
             )
             return AuthorizeResponse(
@@ -644,8 +703,9 @@ async def authorize(request: AuthorizeRequest):
 async def execute(request: ExecuteRequest):
     """
     1. execution_handle (JWT) を検証
-    2. jti を Firestore でチェック（二重実行防止）
-    3. OK なら Tool にプロキシ
+    2. scope と tool_request.path の整合性を検証
+    3. jti を Firestore でチェック（二重実行防止）
+    4. OK なら Tool にプロキシ
     """
     try:
         # JWT 検証（署名、期限）
@@ -660,13 +720,29 @@ async def execute(request: ExecuteRequest):
         jti = decoded.get("jti")
         exp_ts = decoded.get("exp")
         request_id = decoded.get("req_id") or request.request_id
+        scope = decoded.get("scope", "")
+        
+        # scope と path の整合性を検証
+        if not validate_path_for_scope(scope, request.tool_request.path):
+            log_event(
+                phase="EXEC_RESULT",
+                request_id=request_id,
+                reason=f"path not allowed for scope: {scope} -> {request.tool_request.path}",
+                outcome="blocked",
+            )
+            return ExecuteResponse(
+                request_id=request_id,
+                status="blocked",
+                reason=f"path not allowed for scope"
+            )
 
         # Firestore で jti チェック（one-time）
         if not register_jti(jti, exp_ts):
             log_event(
-                phase="exec_blocked",
+                phase="EXEC_RESULT",
                 request_id=request_id,
                 reason="execution_handle already used",
+                outcome="blocked",
             )
             return ExecuteResponse(
                 request_id=request_id,
@@ -674,34 +750,31 @@ async def execute(request: ExecuteRequest):
                 reason="already used"
             )
 
-        # Tool 実行（本来は Envoy 経由だが、まずは直叩きで確認）
-        # scope からアクションを特定
-        scope = decoded.get("scope", "")
+        # アクション名を scope から取得（ログ用）
         action = scope.replace("execute:", "") if scope.startswith("execute:") else "unknown"
-        
-        # ダミーのコンテキスト生成（本来は JWT や DB から取得）
-        dummy_context = {"purpose": "inquiry", "source": "jwt_authorized"}
-        idempotency_key = generate_idempotency_key(request_id, action)
 
         log_event(
-            phase="exec_started",
+            phase="EXEC_REQUEST",
             request_id=request_id,
             action=action,
+            context={"path": request.tool_request.path, "method": request.tool_request.method},
         )
 
         # Tool 実行（Envoy 経由）
         tool_result = await call_tool_via_envoy(
             request_id=request_id,
-            action=action,
-            context=dummy_context,
+            tool_request=request.tool_request,
             execution_handle=request.execution_handle
         )
         
         if tool_result.ok:
             log_event(
-                phase="exec_success",
+                phase="EXEC_RESULT",
                 request_id=request_id,
                 action=action,
+                latency_ms=tool_result.latency_ms,
+                outcome="success",
+                tool={"endpoint": tool_result.endpoint},
             )
             return ExecuteResponse(
                 request_id=request_id,
@@ -710,9 +783,11 @@ async def execute(request: ExecuteRequest):
             )
         else:
             log_event(
-                phase="exec_failed",
+                phase="EXEC_RESULT",
                 request_id=request_id,
                 reason=f"tool error: {tool_result.error_type}",
+                outcome="failed",
+                error_type=tool_result.error_type,
             )
             return ExecuteResponse(
                 request_id=request_id,

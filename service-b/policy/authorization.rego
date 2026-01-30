@@ -2,8 +2,18 @@ package authorization
 
 import rego.v1
 
+# OPA Input Schema (Fixed)
+# {
+#   "action": string,          # e.g., "get_resident_info"
+#   "context": {
+#     "purpose": string,       # e.g., "inquiry", "emergency"
+#     "time": string,          # e.g., "business_hours", "after_hours"
+#     "data_sensitivity": string # e.g., "required", "optional"
+#   }
+# }
+
 # 最終アウトプット（PEPが使う）
-default decision := {"allow": false, "reason": "default deny: no matching policy"}
+default decision := {"allow": false, "reason": "default deny: no matching policy", "policy_id": "default", "tags": []}
 
 # Allow 条件（あなたの PoC の最小）
 allow if {
@@ -29,11 +39,22 @@ deny_reason := "Denied: action is not allowed" if {
 }
 
 # decision を組み立てる
-decision := {"allow": true, "reason": "Allowed: inquiry during business hours"} if {
+decision := {
+  "allow": true,
+  "reason": "Allowed: inquiry during business hours",
+  "policy_id": "P-001",
+  "tags": ["pii", "audit-required"]
+} if {
   allow
 }
 
-decision := {"allow": false, "reason": deny_reason} if {
+decision := {
+  "allow": false,
+  "reason": deny_reason,
+  "policy_id": "P-002",
+  "tags": ["pii-deny"]
+} if {
   not allow
   deny_reason
 }
+

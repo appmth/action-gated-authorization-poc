@@ -1,14 +1,8 @@
 # ===========================================
-# Envoy Gateway - Production (Cloud Run)
+# Envoy Gateway - Local Development
 # ===========================================
 # Uses envsubst for environment variable substitution
 # at container startup (Docker best practice).
-#
-# Environment variables are injected by Cloud Run:
-# - SERVICE_A_HOST, SERVICE_A_PORT
-# - SERVICE_C_HOST, SERVICE_C_PORT
-# - JWKS_URI
-# - TOOL_API_KEY (from Secret Manager)
 
 FROM envoyproxy/envoy:v1.28-latest
 
@@ -16,7 +10,7 @@ FROM envoyproxy/envoy:v1.28-latest
 RUN apt-get update && apt-get install -y gettext-base && rm -rf /var/lib/apt/lists/*
 
 # Copy template and entrypoint
-COPY envoy.yaml.template /etc/envoy/envoy.yaml.template
+COPY envoy-local.yaml /etc/envoy/envoy.yaml.template
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

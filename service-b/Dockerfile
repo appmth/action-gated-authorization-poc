@@ -1,9 +1,22 @@
-FROM openpolicyagent/opa:0.60.0
+# Get OPA binary (use latest for multi-arch support)
+FROM openpolicyagent/opa:latest-static AS opa-binary
 
+# Use debian-slim to have envsubst support
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y gettext-base curl && rm -rf /var/lib/apt/lists/*
+
+COPY --from=opa-binary /opa /usr/local/bin/opa
 COPY policy /policy
+COPY config.yaml.template /etc/opa/config.yaml.template
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Cloud Run の PORT 環境変数に合わせる（デフォルト8080）
+# Default env vars
+ENV ENVIRONMENT=dev
+ENV OPA_LOG_LEVEL=info
+ENV OPA_LOG_FORMAT=json
+
 EXPOSE 8080
 
-# OPA を起動（Cloud Run は PORT=8080 を渡すが、以前の設定で8181の可能性あり）
-CMD ["run", "--server", "--addr=0.0.0.0:8080", "/policy"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
