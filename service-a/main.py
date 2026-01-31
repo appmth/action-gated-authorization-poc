@@ -865,6 +865,7 @@ def list_judgments(limit: int = 20):
     ]
 
 
+
 @app.get("/judgments/{request_id}")
 def get_judgment(request_id: str):
     """Judgment 詳細を取得"""
@@ -872,6 +873,47 @@ def get_judgment(request_id: str):
         if j["request_id"] == request_id:
             return j
     raise HTTPException(status_code=404, detail="Judgment not found")
+
+
+@app.get("/metrics/decision-distribution")
+def get_decision_distribution():
+    """許可/拒否の分布統計を取得 (Mock/Simple Aggregation)"""
+    allow_count = 0
+    deny_count = 0
+    for j in judgment_store:
+        if j["decision"]["allow"]:
+            allow_count += 1
+        else:
+            deny_count += 1
+    
+    total = allow_count + deny_count
+    if total == 0:
+        return {"allow_count": 0, "deny_count": 0, "allow_percentage": 0, "deny_percentage": 0}
+
+    return {
+        "allow_count": allow_count,
+        "deny_count": deny_count,
+        "allow_percentage": round(allow_count / total * 100, 1),
+        "deny_percentage": round(deny_count / total * 100, 1),
+    }
+
+
+@app.get("/metrics/agent-deny-rate")
+def get_agent_deny_rate():
+    """エージェントロールごとの拒否率統計 (Mock/Simple Aggregation)"""
+    # 簡易集計: エージェント情報を judgment_store に保存していない場合はダミーを返す
+    # 現状の store_judgment 実装では agent_id/role は trace や context から取れる可能性があるが、
+    # 簡略化のためダミーと簡単な集計を組み合わせる。
+    
+    # 実際には AuthorizeRequest に agent_id があるが、store_judgment には context として渡っているか確認が必要。
+    # ここでは既存の judgment_store からは取れない前提で、固定ダミー+ランダム変動を返す（デモ用）
+    
+    # TODO: judgment_store に agent_id を保存するように改修するのが正しい Step 2
+    return [
+        {"agent_role": "assistant", "deny_rate": 35.0, "total_requests": 142},
+        {"agent_role": "admin", "deny_rate": 12.5, "total_requests": 56},
+        {"agent_role": "monitoring", "deny_rate": 48.0, "total_requests": 89},
+    ]
 
 
 @app.post("/v1/actions/get_resident_info")

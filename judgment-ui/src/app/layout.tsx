@@ -1,41 +1,29 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google'
 import './globals.css';
-import Link from 'next/link';
-import type { ReactNode } from "react";
-
+import Sidebar from '@/components/Sidebar';
+import TopBar from '@/components/TopBar';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-    title: 'AGA Judgment UI',
-    description: 'Action-Gated Authorization - Judgment Viewer',
+    title: 'Judgment | Action-Gated Authorization',
+    description: 'Judgment Management Dashboard',
 };
 
 export default function RootLayout({
     children,
 }: {
-    children: ReactNode;
-}){
-    return(
+    children: React.ReactNode;
+}) {
+    return (
         <html lang="ja">
-            <body className={inter.className}>
-                {/* ヘッダー */}
-                <header className="bg-gray-900 text-white p-4">
-                    <nav className="container mx-auto flex items-center gap-6">
-                        <Link href="/dashboard" className="hover:underline">
-                            Judgment
-                        </Link>
-                        <Link href="/dashboard" className="hover:underline">
-                            Dashboard
-                        </Link>
-                    </nav>
-                </header>
-
-                {/* メインコンテンツ */}
-                <div className="container mx-auto">
+            <body className={`${inter.className} bg-gray-50 text-gray-900`}>
+                <TopBar />
+                <Sidebar />
+                <main className="ml-64 mt-16 p-8 min-h-[calc(100vh-64px)]">
                     {children}
-                </div>
+                </main>
             </body>
         </html>
     )

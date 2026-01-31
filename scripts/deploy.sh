@@ -95,6 +95,7 @@ deploy_cloud_run() {
                 --source "$source_dir" \
                 --region "$REGION" \
                 --allow-unauthenticated \
+                --memory 512Mi \
                 --set-env-vars "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL"
             ;;
         *)

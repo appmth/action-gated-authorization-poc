@@ -9,12 +9,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL
  * - クライアントに API キーを露出させない
  * - キャッシュ戦略を細かく制御可能
  */
-export async function getJudgments(): Promise<JudgmentSummary[]>{
-    const res = await fetch(`${API_URL}/judgments` , {
+export async function getJudgments(): Promise<JudgmentSummary[]> {
+    const res = await fetch(`${API_URL}/judgments`, {
         cache: 'no-store'
     });
 
-    if(!res.ok){
+    if (!res.ok) {
         throw new Error(`Failed to fetch judgments ${res.status}`)
     }
 
@@ -34,4 +34,16 @@ export async function getJudgment(requestId: string): Promise<JudgmentDetail> {
     }
 
     return res.json()
+}
+
+export async function getDecisionDistribution() {
+    const res = await fetch(`${API_URL}/metrics/decision-distribution`, { cache: 'no-store' });
+    if (!res.ok) throw new Error("Failed to fetch decision distribution");
+    return res.json();
+}
+
+export async function getAgentDenyRate() {
+    const res = await fetch(`${API_URL}/metrics/agent-deny-rate`, { cache: 'no-store' });
+    if (!res.ok) throw new Error("Failed to fetch agent deny rate");
+    return res.json();
 }

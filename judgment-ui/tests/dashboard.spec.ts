@@ -12,18 +12,19 @@ test.describe('Dashboard Page', () => {
     await page.goto('http://localhost:3000/dashboard');
 
     // タイトルが表示されることを確認
-    await expect(page.getByRole('heading', { name: 'Judgment Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Judgment Map' })).toBeVisible();
   });
 
   test('displays judgment table headers', async ({ page }) => {
     await page.goto('http://localhost:3000/dashboard');
 
     // テーブルヘッダーが表示されることを確認
-    await expect(page.getByRole('columnheader', { name: 'Request ID' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Action' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Result' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Reason' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Time' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Agent Role' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Tool' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Action' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Decision' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Reason' })).toBeVisible();
   });
 
   test('shows API connection error when service-a is not running', async ({ page }) => {
