@@ -76,7 +76,8 @@ deploy_cloud_run() {
                 --region "$REGION" \
                 --allow-unauthenticated \
                 --min-instances 0 \
-                --max-instances 5
+                --max-instances 5 \
+                --set-secrets "TOOL_API_KEY=tool-api-key:latest"
             ;;
         envoy-gateway)
             gcloud run deploy "$service" \
@@ -86,7 +87,8 @@ deploy_cloud_run() {
                 --min-instances 0 \
                 --max-instances 5 \
                 --port 8080 \
-                --set-env-vars "^;^SERVICE_A_HOST=$SERVICE_A_HOST;SERVICE_A_PORT=$SERVICE_A_PORT;SERVICE_C_HOST=$SERVICE_C_HOST;SERVICE_C_PORT=$SERVICE_C_PORT;JWKS_URI=$JWKS_URI;UPSTREAM_TLS_SERVICE_A=$UPSTREAM_TLS_SERVICE_A;UPSTREAM_TLS_SERVICE_C=$UPSTREAM_TLS_SERVICE_C"
+                --set-env-vars "^;^SERVICE_A_HOST=$SERVICE_A_HOST;SERVICE_A_PORT=$SERVICE_A_PORT;SERVICE_C_HOST=$SERVICE_C_HOST;SERVICE_C_PORT=$SERVICE_C_PORT;JWKS_URI=$JWKS_URI;UPSTREAM_TLS_SERVICE_A=$UPSTREAM_TLS_SERVICE_A;UPSTREAM_TLS_SERVICE_C=$UPSTREAM_TLS_SERVICE_C" \
+                --set-secrets "TOOL_API_KEY=tool-api-key:latest"
             ;;
         judgment-ui|gov-ui)
             gcloud run deploy "$service" \

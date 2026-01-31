@@ -445,11 +445,43 @@ curl -s -X POST http://localhost:8080/execute \
 
 ---
 
-## 環境停止
+### TC-L09: API キー強制力（Tool 直接アクセス）
+
+**目的**: Tool (service-c) に直接アクセスした場合、API キーがないと拒否されることを確認
+
+#### TC-L09-1: API キーなしで直接アクセス（401 期待）
 
 ```bash
-./scripts/deploy.sh local down
+curl -s -w "\nHTTP: %{http_code}\n" \
+  -X POST http://localhost:8082/resident-info \
+  -H "Content-Type: application/json" \
+  -d '{"request_id": "test", "action": "get_resident_info", "context": {}}'
 ```
+
+**期待結果**:
+```json
+{"detail":"Invalid or missing API key"}
+HTTP: 401
+```
+
+#### TC-L09-2: 不正な API キーで直接アクセス（401 期待）
+
+```bash
+curl -s -w "\nHTTP: %{http_code}\n" \
+  -X POST http://localhost:8082/resident-info \
+  -H "X-Tool-Api-Key: wrong-key" \
+  -H "Content-Type: application/json" \
+  -d '{"request_id": "test", "action": "get_resident_info", "context": {}}'
+```
+
+**期待結果**:
+```json
+{"detail":"Invalid or missing API key"}
+HTTP: 401
+```
+
+**検証項目**:
+- Envoy を通さないアクセスが確実に遮断されること
 
 ---
 
@@ -463,3 +495,4 @@ curl -s -X POST http://localhost:8080/execute \
 | 二重実行防止 | TC-L05 | 同じ JWT での2回目実行は blocked |
 | JWT 有効期限 | TC-L07 | 60秒後に expired |
 | scope/path 整合性検証 | TC-L08 | 許可されていないパスは blocked |
+| Tool 直接アクセスの保護 | TC-L09 | API キーなしでは Tool 実行不可 |

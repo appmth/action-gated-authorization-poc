@@ -19,11 +19,17 @@
     - 条件: `scope` が `execute:get_resident_info` と完全一致すること。
 - **挙動**: 条件を満たさない場合は 403 Forbidden。
 
+### C. API キー注入 (`request_headers_to_add`)
+- **役割**: `/tool/*` ルートへの転送時に `X-Tool-Api-Key` ヘッダを自動付与。
+- **設定**: `append_action: OVERWRITE_IF_EXISTS_OR_ADD` で既存のヘッダを上書き。
+- **キー供給元**: 環境変数 `TOOL_API_KEY`（GCP Secret Manager から注入）。
+- **目的**: Agent が API キーを知らなくても Tool を実行可能にする。直接アクセスの防止。
+
 ## 2. ルーティング設計
 - **/health**: 認証なしでアクセス可能。
-- **/tool/resident-info**: `service-c` の `/resident-info` に転送（Prefix Rewrite）。
-- **/tool/execute**: 旧エンドポイントへの互換層。
+- **/tool/resident-info**: `service-c` の `/resident-info` に転送（Prefix Rewrite）+ API キー注入。
+- **/tool/execute**: 旧エンドポイントへの互換層 + API キー注入。
 
 ## 3. 環境差異の吸収 (envsubst)
-- `envoy.yaml.template` 内の `${SERVICE_C_HOST}` や `${UPSTREAM_TLS_...}` を起動時に置換。
+- `envoy.yaml.template` 内の `${SERVICE_C_HOST}`, `${TOOL_API_KEY}` 等を起動時に置換。
 - ローカルは HTTP、本番は UpstreamTlsContext を設定することで、イメージを一本化。

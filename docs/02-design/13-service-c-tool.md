@@ -13,9 +13,21 @@
 ### POST `/execute` (Legacy)
 以前の汎用実行エンドポイント。現在は `/resident-info` 等の特定パスへの移行が推奨されます。
 
-## 2. 実装のポイント
+## 2. API キー検証（L3 防御レイヤー）
+
+全リクエスト（`/health` を除く）に対して `X-Tool-Api-Key` ヘッダの検証を行うミドルウェアを実装しています。
+
+- **ヘッダ**: `X-Tool-Api-Key`
+- **キー供給元**: GCP Secret Manager（`tool-api-key`）→ Cloud Run 環境変数 `TOOL_API_KEY`
+- **ローカル**: docker-compose の環境変数（デフォルト: `local-dev-key-12345`）
+- **不一致時**: `401 Unauthorized` を返却
+- **キー未設定時**: 検証をスキップ（開発用フォールバック）
+
+これにより、Envoy Gateway を経由しない直接アクセスはすべて遮断されます。
+
+## 3. 実装のポイント
 - **FastAPI**: 軽量な API 実装。
 - **構造化ログ**: クラウドロギングでの分析を容易にするため、全てのレスポンスに `request_id` や `phase` を含めて stdout に出力。
 
-## 3. インフラ上の位置付け
-このサービスは直接インターネットからアクセスされることはなく、必ず **Envoy Gateway** の背後に配置されます。そのため、認証の実装をアプリケーション側で行わず、フロントの Envoy に委ねる設計（信頼されたネットワーク）をとっています。
+## 4. インフラ上の位置付け
+このサービスは **Envoy Gateway** の背後に配置されます。Envoy が `X-Tool-Api-Key` ヘッダを注入し、service-c がそれを検証する多層防御（Defense-in-Depth）の設計です。Agent は API キーを一切知りません。

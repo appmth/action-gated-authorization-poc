@@ -370,11 +370,12 @@ curl -s -X POST https://service-a.action-gated.tech/execute \
 
 **検証項目**:
 - `status` が `"blocked"` であること
-- `reason` が `"expired"` であること
+- `reason` が `"expired"` または `"invalid token: Signature verification failed"` であること
 
-> **備考**: Envoy の JWT フィルタはデフォルトで `exp` チェック時に 60 秒の clock skew を許容する。
-> `clock_skew_seconds: 1` を設定することで、ほぼ即時に期限切れを検出する。
-> さらに service-a の `/execute` エンドポイントが PyJWT で期限を二重チェックするため、構造として期限切れ JWT の実行は防止される。
+> **備考**: Cloud Run の `min-instances=0` 設定では、75秒の待機中にインスタンスがリサイクルされる可能性がある。
+> その場合、新しいインスタンスで RSA キーペアが再生成されるため、`reason` が `"expired"` ではなく
+> `"invalid token: Signature verification failed"` となる。いずれの場合も JWT は `blocked` として拒否される。
+> Envoy の `clock_skew_seconds: 1` により、Envoy 層でも期限切れ JWT はほぼ即時に検出される。
 
 ---
 
@@ -470,6 +471,47 @@ curl -s -X POST https://service-a.action-gated.tech/execute \
 
 ---
 
+### TC-G09: API キー強制力（Tool 直接アクセス）
+
+**目的**: Tool (service-c) に直接アクセスした場合、API キーがないと拒否されることを確認
+
+#### TC-G09-1: API キーなしで直接アクセス（401 期待）
+
+```bash
+curl -s -w "\nHTTP: %{http_code}\n" \
+  -X POST https://service-c.action-gated.tech/resident-info \
+  -H "Content-Type: application/json" \
+  -d '{"request_id": "test", "action": "get_resident_info", "context": {}}'
+```
+
+**期待結果**:
+```json
+{"detail":"Invalid or missing API key"}
+HTTP: 401
+```
+
+#### TC-G09-2: 不正な API キーで直接アクセス（401 期待）
+
+```bash
+curl -s -w "\nHTTP: %{http_code}\n" \
+  -X POST https://service-c.action-gated.tech/resident-info \
+  -H "X-Tool-Api-Key: wrong-key" \
+  -H "Content-Type: application/json" \
+  -d '{"request_id": "test", "action": "get_resident_info", "context": {}}'
+```
+
+**期待結果**:
+```json
+{"detail":"Invalid or missing API key"}
+HTTP: 401
+```
+
+**検証項目**:
+- Envoy を通さない直接アクセスが確実に遮断されること
+- API キーは GCP Secret Manager から注入され、Agent には一切公開されないこと
+
+---
+
 ## E2E シナリオテスト
 
 ### TC-G-E2E-1: Allow → Execute → 二重実行防止
@@ -527,8 +569,9 @@ curl -s -X POST https://service-a.action-gated.tech/execute \
 | 実行前に判断を強制 | TC-G05 | JWT なしでは 401、構造的に実行不可 |
 | 理由が説明可能 | TC-G03, TC-G04 | `reason` フィールドに人間可読な説明 |
 | 二重実行防止 | TC-G06 | 同じ JWT での2回目実行は blocked |
-| JWT 有効期限 | TC-G07 | 60秒後に expired |
+| JWT 有効期限 | TC-G07 | 60秒後に blocked (expired or signature mismatch) |
 | scope/path 整合性検証 | TC-G08 | 許可されていないパスは blocked |
+| Tool 直接アクセスの保護 | TC-G09 | API キーなしでは Tool 実行不可 |
 
 ---
 

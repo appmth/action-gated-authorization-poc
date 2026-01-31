@@ -651,19 +651,41 @@ async def authorize(request: AuthorizeRequest):
                 headers={"kid": "judgment-key-1"}
             )
             
+            decision_dict = {
+                "allow": True,
+                "reason": decision.reason,
+                "policy_id": decision.policy_id,
+                "tags": decision.tags,
+            }
             log_event(
                 phase="AUTHZ_DECISION",
                 request_id=request_id,
                 action=request.action,
-                decision={
-                    "allow": True,
-                    "reason": decision.reason,
-                    "policy_id": decision.policy_id,
-                    "tags": decision.tags,
-                },
+                decision=decision_dict,
                 reason=decision.reason,
             )
-            
+
+            now_str = datetime.utcnow().isoformat() + "Z"
+            store_judgment(
+                request_id=request_id,
+                action=request.action,
+                context=context_dict,
+                decision=decision_dict,
+                pep_enforcement={
+                    "pdp_called": True,
+                    "tool_called": False,
+                    "jwt_issued": True,
+                    "side_effects": "none",
+                },
+                tool_result=None,
+                trace=[
+                    {"step": "Request Received", "at": now_str, "status": "completed"},
+                    {"step": "PDP Consulted", "at": now_str, "status": "completed", "note": "Policy evaluated"},
+                    {"step": "Decision: ALLOW", "at": now_str, "status": "completed", "note": decision.reason[:50]},
+                    {"step": "JWT Issued", "at": now_str, "status": "completed", "note": "execution_handle issued (60s TTL)"},
+                ],
+            )
+
             return AuthorizeResponse(
                 request_id=request_id,
                 decision="allow",
@@ -672,18 +694,41 @@ async def authorize(request: AuthorizeRequest):
                 expires_in_seconds=60
             )
         else:
+            decision_dict = {
+                "allow": False,
+                "reason": decision.reason,
+                "policy_id": decision.policy_id,
+                "tags": decision.tags,
+            }
             log_event(
                 phase="AUTHZ_DECISION",
                 request_id=request_id,
                 action=request.action,
-                decision={
-                    "allow": False,
-                    "reason": decision.reason,
-                    "policy_id": decision.policy_id,
-                    "tags": decision.tags,
-                },
+                decision=decision_dict,
                 reason=decision.reason,
             )
+
+            now_str = datetime.utcnow().isoformat() + "Z"
+            store_judgment(
+                request_id=request_id,
+                action=request.action,
+                context=context_dict,
+                decision=decision_dict,
+                pep_enforcement={
+                    "pdp_called": True,
+                    "tool_called": False,
+                    "jwt_issued": False,
+                    "side_effects": "none",
+                },
+                tool_result=None,
+                trace=[
+                    {"step": "Request Received", "at": now_str, "status": "completed"},
+                    {"step": "PDP Consulted", "at": now_str, "status": "completed", "note": "Policy evaluated"},
+                    {"step": "Decision: DENY", "at": now_str, "status": "blocked", "note": decision.reason[:50]},
+                    {"step": "Tool Execution", "at": now_str, "status": "skipped", "note": "Not called due to DENY"},
+                ],
+            )
+
             return AuthorizeResponse(
                 request_id=request_id,
                 decision="deny",

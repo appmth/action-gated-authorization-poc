@@ -71,6 +71,19 @@ service-c (Tool)
 | `SERVICE_A_HOST` | `service-a.action-gated.tech` | JWKS 取得先 |
 | `SERVICE_C_HOST` | `service-c.action-gated.tech` | Tool Proxy 先 |
 | `JWKS_URI` | `https://service-a.action-gated.tech/.well-known/jwks.json` | JWT 公開鍵エンドポイント |
+| `TOOL_API_KEY` | *(Secret Manager)* | Tool API キー（`X-Tool-Api-Key` ヘッダ注入用） |
+
+### 環境変数（service-c）
+
+| 変数名 | 値 | 用途 |
+| :--- | :--- | :--- |
+| `TOOL_API_KEY` | *(Secret Manager)* | API キー検証用 |
+
+### Secret Manager
+
+| シークレット名 | 参照サービス | 用途 |
+| :--- | :--- | :--- |
+| `tool-api-key` | envoy-gateway, service-c | Tool API キー（`--set-secrets` で注入） |
 
 ## 4. データストア
 
@@ -92,3 +105,4 @@ service-c (Tool)
 ```
 
 デプロイスクリプトは `.env.prod` から環境変数を読み込み、`gcloud run deploy --set-env-vars` で Cloud Run に反映します。
+シークレットは `--set-secrets` で Secret Manager から注入されます。

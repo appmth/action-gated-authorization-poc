@@ -2,36 +2,45 @@
 
 import { useState } from "react";
 
-type AgentResponse = {
+type AuthorizeResponse = {
   request_id: string;
-  action: string;
-  allowed: boolean;
+  decision: "allow" | "deny";
   reason: string;
-  data?: {
-    resident_name: string;
-    address: string;
-    garbage_day: string;
-  };
+  execution_handle: string | null;
+  expires_in_seconds: number | null;
 };
 
+type ExecuteResponse = {
+  request_id: string;
+  status: "success" | "blocked" | "failed";
+  result: Record<string, unknown> | null;
+  reason: string | null;
+};
+
+type ProcessStep = "idle" | "authorizing" | "authorized" | "executing" | "done";
+
 export default function InquiryPage() {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [response, setResponse] = useState<AgentResponse | null>(null);
+  const [step, setStep] = useState<ProcessStep>("idle");
+  const [authResponse, setAuthResponse] = useState<AuthorizeResponse | null>(null);
+  const [execResponse, setExecResponse] = useState<ExecuteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleProcess = async () => {
-    setIsProcessing(true);
-    setResponse(null);
+    setStep("authorizing");
+    setAuthResponse(null);
+    setExecResponse(null);
     setError(null);
 
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-      const res = await fetch(`${apiUrl}/v1/actions/get_resident_info`, {
+      // Step 1: /authorize
+      const authRes = await fetch(`${apiUrl}/authorize`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          agent_id: "gov-ui-agent",
+          action: "get_resident_info",
           context: {
             purpose: "inquiry",
             time: "business_hours",
@@ -40,26 +49,45 @@ export default function InquiryPage() {
         }),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        setResponse({
-          request_id: errorData.detail?.request_id || "unknown",
-          action: errorData.detail?.action || "get_resident_info",
-          allowed: false,
-          reason: errorData.detail?.reason || "リクエストが拒否されました",
-        });
-      } else {
-        const data = await res.json();
-        setResponse(data);
+      const authData: AuthorizeResponse = await authRes.json();
+      setAuthResponse(authData);
+
+      if (authData.decision === "deny" || !authData.execution_handle) {
+        setStep("done");
+        return;
       }
+
+      setStep("executing");
+
+      // Step 2: /execute
+      const execRes = await fetch(`${apiUrl}/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request_id: authData.request_id,
+          execution_handle: authData.execution_handle,
+          tool_request: {
+            method: "POST",
+            path: "/resident-info",
+            body: {
+              request_id: authData.request_id,
+              action: "get_resident_info",
+              context: {},
+            },
+          },
+        }),
+      });
+
+      const execData: ExecuteResponse = await execRes.json();
+      setExecResponse(execData);
+      setStep("done");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "通信エラーが発生しました"
-      );
-    } finally {
-      setIsProcessing(false);
+      setError(err instanceof Error ? err.message : "通信エラーが発生しました");
+      setStep("done");
     }
   };
+
+  const isProcessing = step === "authorizing" || step === "executing";
 
   return (
     <div className="space-y-8">
@@ -84,61 +112,117 @@ export default function InquiryPage() {
         </div>
       </div>
 
-      {/* AI Agent ステータス表示 */}
+      {/* 2段階認可ステップ表示 */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <h3 className="text-sm font-medium text-gray-500 mb-3">
-          AI Agent ステータス
+        <h3 className="text-sm font-medium text-gray-500 mb-4">
+          AI Agent 処理ステップ
         </h3>
 
-        {!isProcessing && !response && !error && (
-          <div className="text-gray-500">待機中...</div>
-        )}
-
-        {isProcessing && (
-          <div className="flex items-center gap-3 text-blue-600">
-            <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-            <span>AI Agent が回答案を生成しています...</span>
+        <div className="space-y-4">
+          {/* Step 1: 認可判定 */}
+          <div className="flex items-start gap-3">
+            <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+              step === "idle"
+                ? "bg-gray-200 text-gray-500"
+                : step === "authorizing"
+                  ? "bg-blue-500 text-white"
+                  : authResponse?.decision === "allow"
+                    ? "bg-green-500 text-white"
+                    : "bg-red-500 text-white"
+            }`}>
+              1
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-gray-700">認可判定 (Authorize)</div>
+              {step === "authorizing" && (
+                <div className="flex items-center gap-2 mt-1 text-blue-600 text-sm">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  PDP にポリシー判定を問い合わせ中...
+                </div>
+              )}
+              {authResponse && (
+                <div className="mt-1">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    authResponse.decision === "allow"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      authResponse.decision === "allow" ? "bg-green-500" : "bg-red-500"
+                    }`}></span>
+                    {authResponse.decision === "allow" ? "許可" : "拒否"}
+                  </span>
+                  <p className="text-xs text-gray-500 mt-1">{authResponse.reason}</p>
+                </div>
+              )}
+            </div>
           </div>
-        )}
 
-        {response && (
-          <div
-            className={`px-3 py-1 rounded-full text-sm inline-flex items-center gap-2 ${response.allowed
-                ? "bg-green-100 text-green-700"
-                : "bg-red-100 text-red-700"
-              }`}
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${response.allowed ? "bg-green-500" : "bg-red-500"
-                }`}
-            ></span>
-            {response.allowed ? "処理完了" : "処理拒否"}
+          {/* Step 2: ツール実行 */}
+          <div className="flex items-start gap-3">
+            <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+              step === "idle" || step === "authorizing" || (step === "done" && authResponse?.decision === "deny")
+                ? "bg-gray-200 text-gray-500"
+                : step === "executing"
+                  ? "bg-blue-500 text-white"
+                  : execResponse?.status === "success"
+                    ? "bg-green-500 text-white"
+                    : "bg-red-500 text-white"
+            }`}>
+              2
+            </div>
+            <div className="flex-1">
+              <div className={`text-sm font-medium ${
+                step === "idle" || step === "authorizing" || (step === "done" && authResponse?.decision === "deny")
+                  ? "text-gray-400"
+                  : "text-gray-700"
+              }`}>
+                ツール実行 (Execute)
+              </div>
+              {step === "executing" && (
+                <div className="flex items-center gap-2 mt-1 text-blue-600 text-sm">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  Envoy Gateway 経由でツールを実行中...
+                </div>
+              )}
+              {execResponse && (
+                <div className="mt-1">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    execResponse.status === "success"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      execResponse.status === "success" ? "bg-green-500" : "bg-red-500"
+                    }`}></span>
+                    {execResponse.status === "success" ? "実行完了" : execResponse.status === "blocked" ? "ブロック" : "失敗"}
+                  </span>
+                  {execResponse.reason && (
+                    <p className="text-xs text-gray-500 mt-1">{execResponse.reason}</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        )}
-
-        {error && (
-          <div className="text-red-600">
-            エラー: {error}
-          </div>
-        )}
+        </div>
 
         <button
           onClick={handleProcess}
           disabled={isProcessing}
-          className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          className="mt-6 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
         >
           {isProcessing ? "処理中..." : "問い合わせを処理"}
         </button>
       </div>
 
-      {/* AI Agent 回答案表示 */}
-      {response && (
+      {/* 結果表示 */}
+      {step === "done" && authResponse && (
         <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
           <h3 className="text-sm font-medium text-gray-500 mb-3">
             AI Agent 回答案
           </h3>
 
-          {response.allowed && response.data ? (
+          {authResponse.decision === "allow" && execResponse?.status === "success" && execResponse.result ? (
             <div className="bg-green-50 border border-green-100 rounded-lg p-4">
               <p className="text-gray-800">
                 ○○町のゴミ収集日は毎週火曜日です。
@@ -146,15 +230,26 @@ export default function InquiryPage() {
                 粗大ゴミは第2・第4水曜日に収集しています。
               </p>
             </div>
-          ) : (
+          ) : authResponse.decision === "deny" ? (
             <div className="bg-red-50 border border-red-100 rounded-lg p-4">
-              <p className="text-red-700">{response.reason}</p>
+              <p className="text-red-700">認可拒否: {authResponse.reason}</p>
             </div>
-          )}
+          ) : execResponse?.status === "blocked" || execResponse?.status === "failed" ? (
+            <div className="bg-red-50 border border-red-100 rounded-lg p-4">
+              <p className="text-red-700">実行{execResponse.status === "blocked" ? "ブロック" : "失敗"}: {execResponse.reason}</p>
+            </div>
+          ) : null}
 
           <div className="mt-4 text-xs text-gray-400">
-            Request ID: {response.request_id}
+            Request ID: {authResponse.request_id}
           </div>
+        </div>
+      )}
+
+      {/* エラー表示 */}
+      {error && (
+        <div className="bg-white rounded-lg border border-red-200 p-6 shadow-sm">
+          <div className="text-red-600">エラー: {error}</div>
         </div>
       )}
 

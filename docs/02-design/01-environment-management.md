@@ -42,3 +42,4 @@
 | `UPSTREAM_TLS_...` | Envoy の上流通信 TLS 設定 | (空文字) | `transport_socket: ...` |
 | `OPA_LOG_FORMAT` | OPA のログ形式 | `text` | `json` |
 | `FIRESTORE_EMULATOR_HOST` | Firestore エミュレータへの接続先 | `firestore-emulator:8080` | (未設定 = 本番 Firestore) |
+| `TOOL_API_KEY` | Tool 実行時の認証キー | (設定不要/空文字) | `Set by Secret Manager` |
