@@ -15,4 +15,5 @@
 | **[11-service-b-pdp.md](11-service-b-pdp.md)** | Service-B 詳細設計 | PDP (OPA) のポリシー構造と判定ロジック |
 | **[12-envoy-gateway.md](12-envoy-gateway.md)** | Envoy Gateway 詳細設計 | Envoy の設定、JWT検証、およびルーティングルール |
 | **[13-service-c-tool.md](13-service-c-tool.md)** | Service-C 詳細設計 | Tool API のモック実装と保護機能 |
-| **[20-judgment-ui.md](20-judgment-ui.md)** | Judgment UI 詳細設計 | 認可プロセスを可視化・監査するための管理画面の設計 |
+| **[20-judgment-ui.md](20-judgment-ui.md)** | Judgment Dashboard 詳細設計 | 認可プロセスを可視化（Map, Detail, Graph）するための管理画面の設計 |
+| **[21-gov-ui.md](21-gov-ui.md)** | Gov UI 詳細設計 | デモシナリオを実行するための自治体職員向けクライアントアプリの設計 |

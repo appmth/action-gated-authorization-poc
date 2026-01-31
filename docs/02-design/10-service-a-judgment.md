@@ -38,7 +38,39 @@ Judgment サービスは、認可判定（Phase 1）と実行仲介（Phase 2）
 |-------|----------------|
 | `execute:get_resident_info` | `/resident-info` |
 
-## 3. 内部コンポーネント
+## 3. 監査・管理API (Audit & Management APIs)
+Judgment UI および外部監査システム向けのデータ提供APIです。
+
+### Endpoints
+#### 1. List Judgments
+- **GET** `/judgments`
+- **Query Params**:
+  - `limit`: 取得件数 (default: 20)
+- **Response**: `[ { request_id, action, result, reason_short, created_at }, ... ]`
+
+#### 2. Get Judgment Detail
+- **GET** `/judgments/{request_id}`
+- **Response**:
+    ```json
+    {
+      "request_id": "...",
+      "created_at": "...",
+      "action": "...",
+      "context": { ... },
+      "decision": { "allow": true, "reason": "..." },
+      "pep_enforcement": { ... },
+      "tool_result": { ... },
+      "trace": [ ... ]
+    }
+    ```
+
+#### 3. Metrics (Step 2 Future)
+- **GET** `/metrics/decision-distribution`
+    - 直近（または指定期間）の ALLOW / DENY カウントと割合を返却。
+- **GET** `/metrics/agent-deny-rate`
+    - エージェントロールごとの拒否率、総リクエスト数を返却。
+
+## 4. 内部コンポーネント
 - **FastAPI**: API フレームワーク。
 - **python-jose**: JWT の署名・検証。
 - **google-cloud-firestore**: JTI の一意識別子管理。
