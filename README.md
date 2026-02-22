@@ -1,84 +1,126 @@
 # Action-Gated Authorization (AGA) - PoC
 
-AI Agent の Action を実行直前で必ず評価・制御する認可構造（Action-Gated Authorization）の最小 PoC です。
+AI Agent の Action を**実行直前**で必ず評価・制御する認可構造（Action-Gated Authorization）の PoC です。
 
-## 概要
+## このPoCで証明すること
 
-この PoC では、AI Agent の行動を「アプリケーションの if 文」ではなく、「インフラ層（Envoy）での検証」と「中央集権的な認可サービス（Judgment）」によって構造的に制御します。
+1. **Action は同じでも Context によって Allow / Deny が変わる**
+2. **PEP は必ず「実行前」に判断を強制する**
+3. **判断理由（reason）は必ず人間に説明可能な形で残る**
 
-### 特徴
-- **2段認可**: Phase 1 (認可判定) と Phase 2 (実行要求) の分離。
-- **構造的強制力**: Envoy Gateway による JWT 検証と RBAC (scope 判定) の強制。
-- **完全性担保**: コンテキストのハッシュ化（ctx_hash）と多重実行防止（jti/Firestore）。
-- **Build Once, Run Anywhere**: 環境変数管理の一本化。
+## アーキテクチャ
 
-## 設計ドキュメント
+```
+Agent / Gov-UI
+    │
+    ▼
+┌──────────────────────────────┐
+│  service-a (Judgment / PEP)  │  ← /authorize → /execute の2段階
+│  - 実行前に必ず PDP に問い合わせ │
+│  - Deny なら実行させない        │
+└──────────┬───────────────────┘
+           │
+           ▼
+┌──────────────────────────────┐
+│  service-b (PDP / OPA)       │  ← Rego ポリシーで判断
+│  - Allow / Deny + reason 返却 │
+│  - Context (purpose × time)  │
+└──────────────────────────────┘
+           │
+           ▼ (Allow 時のみ)
+┌──────────────────────────────┐
+│  service-c (Tool API)        │  ← 住民情報 Mock
+└──────────────────────────────┘
+```
 
-詳細な設計については、以下のドキュメントを参照してください。
-- **[全体設計 (Architecture)](docs/02-design/05-architecture-diagram.md)**
-- **[インフラ・ネットワーク (DNS)](docs/02-design/06-infrastructure-network.md)**
-- **[シーケンス (Sequence Diagram)](docs/02-design/04-sequence-diagram.md)**
-- **[API 仕様 (OpenAPI)](docs/02-design/03-interface-spec.yaml)**
-- **[環境変数管理](docs/02-design/01-environment-management.md)**
-- **[構造的強制力の詳細](docs/02-design/02-structural-enforcement.md)**
+### 主要コンポーネント
+
+| コンポーネント | 役割 | 技術 |
+|---|---|---|
+| service-a | Judgment Service (PEP) - 認可判定 + 実行制御 | Python / FastAPI |
+| service-b | PDP - ポリシー判定エンジン | OPA (Rego) |
+| service-c | Tool API - Mock 業務サービス | Python / FastAPI |
+| envoy-gateway | JWT 検証 + Proxy | Envoy |
+| agent-simulator | AI Agent トラフィック生成（6エージェント） | Python / FastAPI |
+| judgment-ui | 認可判断の監査ダッシュボード | Next.js |
+| gov-ui | デモ用行政 UI | Next.js |
 
 ## ディレクトリ構造
 
 ```
 action-gated-authorization-poc/
-├── envoy-gateway/  # Envoy Gateway (JWT Auth & RBAC)
-├── service-a/      # Judgment Service (PEP: /authorize, /execute)
-├── service-b/      # PDP: OPA (Policy Decision Point)
-├── service-c/      # Tool API (Mock: /resident-info)
-├── judgment-ui/    # 認可判定の監査画面 (Next.js)
-├── gov-ui/         # デモ用行政 UI (Next.js)
-├── scripts/        # 共通起動・デプロイスクリプト
-└── docs/
-    ├── 01-plan/    # 過去の計画・検討資料 (Historical)
-    └── 02-design/  # 最新の設計ドキュメント
+├── service-a/            # Judgment Service (PEP: /authorize, /execute)
+├── service-b/            # PDP: OPA (Policy Decision Point)
+├── service-c/            # Tool API (Mock: /resident-info)
+├── envoy-gateway/        # Envoy Gateway (JWT Auth & Proxy)
+├── agent-simulator/      # AI Agent Traffic Generator
+├── judgment-ui/          # 監査ダッシュボード (Next.js)
+│   └── tests/            # Playwright E2E テスト
+├── gov-ui/               # デモ用行政 UI (Next.js)
+├── demo/                 # デモ動画・ナレーション・スライド素材
+│   ├── ai-naration/      # 生成音声 (mp3)
+│   ├── movie/            # 録画素材 (mkv) ※ .gitignore
+│   ├── mock/             # デモ用 Mock HTML
+│   └── statistic/        # スライド素材・仕様
+├── scripts/              # デプロイ・デモ用スクリプト
+├── docs/
+│   ├── 01-plan/          # 計画・検討資料
+│   ├── 02-design/        # 設計ドキュメント
+│   └── 03-test/          # テスト仕様書
+├── infra/                # インフラ設定 (予約)
+├── docker-compose.yml    # ローカル全サービス起動
+└── .claude/              # Claude Code 設定・コマンド
 ```
+
+## 設計ドキュメント
+
+- [全体設計 (Architecture)](docs/02-design/05-architecture-diagram.md)
+- [シーケンス図](docs/02-design/04-sequence-diagram.md)
+- [API 仕様 (OpenAPI)](docs/02-design/03-interface-spec.yaml)
+- [環境変数管理](docs/02-design/01-environment-management.md)
+- [構造的強制力の詳細](docs/02-design/02-structural-enforcement.md)
+- [Service-A Judgment 設計](docs/02-design/10-service-a-judgment.md)
+- [Judgment UI 設計](docs/02-design/20-judgment-ui.md)
+- [Gov-UI 設計](docs/02-design/21-gov-ui.md)
+- [Agent Simulator 設計](docs/02-design/30-agent-simulator.md)
+- [ローカル開発環境](docs/02-design/06-local-development.md)
 
 ## ローカル開発環境の起動
 
-Docker Compose を使用して、全サービスをワンコマンドで起動するのが最も推奨される方法です。
+### 前提
 
-### 前提: Firestore Emulator の起動
+- Docker がインストールされていること
+- Judgment UI / Gov UI の開発には Node.js (v20+) が必要
 
-二重実行防止（JTI Store）を動作させるには、**先に** ホストマシンで Firebase Emulator を起動してください。
-
-```bash
-# 初回のみ: Firebase CLI のインストール
-npm install -g firebase-tools
-
-# Firestore Emulator の起動 (ポート 8080)
-firebase emulators:start --only firestore
-```
-
-> [!NOTE]
-> Apple Silicon (M1/M2/M3) では、Docker 内で Firestore Emulator を動かすより、ホストで直接実行する方が高速で安定します。
-
-### 推奨: Docker Compose での起動
+### Docker Compose での起動（推奨）
 
 ```bash
-# 全サービスの起動 (ビルド含む)
+# 全サービスの起動（ビルド含む）
 ./scripts/deploy.sh local
 
 # サービスの停止
 ./scripts/deploy.sh local down
 ```
 
-起動後、以下のポートで各サービスにアクセス可能です。
-- **Judgment (service-a)**: http://localhost:8080
-- **OPA (service-b)**: http://localhost:8181
-- **Tool (service-c)**: http://localhost:8082
-- **Envoy Gateway**: http://localhost:10000
-- **Firestore Emulator**: http://localhost:8080 (ホストで別途起動)
-- **Judgment UI**: http://localhost:3000
-- **Gov UI**: http://localhost:3001
+起動後のアクセス先:
 
-## 動作確認 (API テスト)
+| サービス | URL |
+|---|---|
+| Judgment (service-a) | http://localhost:8080 |
+| OPA (service-b) | http://localhost:8181 |
+| Tool (service-c) | http://localhost:8082 |
+| Envoy Gateway | http://localhost:10000 |
+| Agent Simulator | http://localhost:8090 |
+| Firestore Emulator | http://localhost:8086 |
+| Judgment UI | http://localhost:3000 (`cd judgment-ui && npm run dev`) |
+| Gov UI | http://localhost:3001 (`cd gov-ui && npm run dev`) |
 
-### 1. 認可判定要求 (Phase 1)
+> **Note**: Firestore Emulator は docker-compose に含まれているため、別途起動の必要はありません。
+
+## 動作確認（API テスト）
+
+### 1. 認可判定要求（Phase 1）
+
 ```bash
 curl -sX POST http://localhost:8080/authorize \
   -H "Content-Type: application/json" \
@@ -92,12 +134,12 @@ curl -sX POST http://localhost:8080/authorize \
     }
   }' | jq
 ```
-レスポンスの `execution_handle` (JWT) を取得します。
 
-### 2. 実行要求 (Phase 2)
-取得した JWT を使用して実行を依頼します（Judgment が Envoy 経由で Tool を呼び出します）。
+レスポンスの `execution_handle`（JWT）を取得します。
+
+### 2. 実行要求（Phase 2）
+
 ```bash
-# JWT 部分を取得した値に置き換えてください
 curl -sX POST http://localhost:8080/execute \
   -H "Content-Type: application/json" \
   -d '{
@@ -106,26 +148,17 @@ curl -sX POST http://localhost:8080/execute \
   }' | jq
 ```
 
-## デプロイ (Google Cloud)
-
-`scripts/deploy.sh` を使用して、Cloud Run に各コンポーネントをデプロイできます。
+## デプロイ（Google Cloud）
 
 ```bash
 # 特定のサービスをデプロイ
 ./scripts/deploy.sh prod service-a
+./scripts/deploy.sh prod judgment-ui
+./scripts/deploy.sh prod gov-ui
 
 # 全バックエンドサービスを一括デプロイ
 ./scripts/deploy.sh prod all
 ```
 
-> [!NOTE]
-> デプロイ前に `.env.prod` の内容が正しいことを確認してください。
-
-## 開発者向け情報
-
-### 手動起動 (個別サービス)
-各ディレクトリで以下のコマンドを使用して個別起動も可能です。
-- **Python**: `python -m uvicorn main:app --port XXXX`
-- **Next.js**: `npm run dev`
-
-詳細は各ディレクトリ内のソースコード、または `docs/01-plan` 内の過去資料を参照してください。
+> **Note**: デプロイ前に `.env.prod` の内容が正しいことを確認してください。
+> UI（judgment-ui / gov-ui）は `all` に含まれません。個別にデプロイしてください。

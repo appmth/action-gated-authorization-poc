@@ -14,7 +14,7 @@ graph TB
         PDP["Policy Engine<br/>(service-b: OPA)"]
         JTIStore[("JTI Store<br/>(Firestore)")]
         
-        Judgment -- "/v1/data/authz" --> PDP
+        Judgment -- "/v1/data/authorization/decision" --> PDP
         Judgment -- "Check/Register JTI" --> JTIStore
     end
 

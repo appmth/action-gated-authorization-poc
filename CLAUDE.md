@@ -42,7 +42,6 @@
 - IAM / 認証の完成度を競わない
 - LLM の賢さ・推論能力を競わない
 - Envoy / Sidecar による強制はPoCでは行わない
-- 多数の Action / Context を増やさない
 
 ---
 
@@ -51,8 +50,8 @@
 - 実行基盤：Cloud Run
 - PDP：OPA（Rego）
 - PEP：アプリ内 PEP
-- Action：1つ（get_resident_info）
-- Context：2パターン（Allow / Deny）
+- Action：4つ（get_resident_info, read_resident_record, update_benefit_status, send_official_notice）
+- Context：purpose（inquiry / audit / approval / notification / emergency）× time（business_hours / after_hours）の組み合わせ
 
 ---
 

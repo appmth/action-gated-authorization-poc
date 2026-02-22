@@ -4,7 +4,9 @@
 # ===========================================
 # Usage:
 #   ./scripts/deploy.sh prod service-a    # Deploy service-a to Cloud Run
-#   ./scripts/deploy.sh prod all          # Deploy all services to Cloud Run
+#   ./scripts/deploy.sh prod judgment-ui  # Deploy judgment-ui to Cloud Run
+#   ./scripts/deploy.sh prod gov-ui       # Deploy gov-ui to Cloud Run
+#   ./scripts/deploy.sh prod all          # Deploy all backend services to Cloud Run
 #   ./scripts/deploy.sh local             # Start all services locally (docker-compose up)
 #   ./scripts/deploy.sh local down        # Stop local services (docker-compose down)
 
@@ -90,12 +92,28 @@ deploy_cloud_run() {
                 --set-env-vars "^;^SERVICE_A_HOST=$SERVICE_A_HOST;SERVICE_A_PORT=$SERVICE_A_PORT;SERVICE_C_HOST=$SERVICE_C_HOST;SERVICE_C_PORT=$SERVICE_C_PORT;JWKS_URI=$JWKS_URI;UPSTREAM_TLS_SERVICE_A=$UPSTREAM_TLS_SERVICE_A;UPSTREAM_TLS_SERVICE_C=$UPSTREAM_TLS_SERVICE_C" \
                 --set-secrets "TOOL_API_KEY=tool-api-key:latest"
             ;;
+        agent-simulator)
+            gcloud run deploy "$service" \
+                --source "$source_dir" \
+                --region "$REGION" \
+                --allow-unauthenticated \
+                --min-instances 0 \
+                --max-instances 1 \
+                --set-env-vars "SERVICE_A_BASE_URL=$SERVICE_A_URL"
+            ;;
         judgment-ui|gov-ui)
             gcloud run deploy "$service" \
                 --source "$source_dir" \
                 --region "$REGION" \
                 --allow-unauthenticated \
-                --set-env-vars "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL"
+                --clear-base-image \
+                --port 3000 \
+                --memory 512Mi \
+                --cpu 1 \
+                --min-instances 0 \
+                --max-instances 5 \
+                --set-env-vars "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL" \
+                --set-build-env-vars "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL"
             ;;
         *)
             log_error "Unknown service: $service"
@@ -108,7 +126,7 @@ deploy_cloud_run() {
 
 # Deploy all services
 deploy_all() {
-    local services=("service-b" "service-c" "service-a" "envoy-gateway")
+    local services=("service-b" "service-c" "service-a" "envoy-gateway" "agent-simulator")
     for svc in "${services[@]}"; do
         deploy_cloud_run "$svc"
     done
@@ -133,6 +151,7 @@ local_up() {
     echo "  service-b (PDP/OPA):  http://localhost:8181"
     echo "  service-c (Tool):     http://localhost:8082"
     echo "  envoy-gateway:        http://localhost:10000"
+    echo "  agent-simulator:      http://localhost:8090"
 }
 
 local_down() {
@@ -151,13 +170,14 @@ usage() {
     echo "  local   Run locally with docker-compose"
     echo ""
     echo "Commands for 'prod':"
-    echo "  service-a      Deploy service-a"
-    echo "  service-b      Deploy service-b"
-    echo "  service-c      Deploy service-c"
-    echo "  envoy-gateway  Deploy envoy-gateway"
-    echo "  judgment-ui    Deploy judgment-ui"
-    echo "  gov-ui         Deploy gov-ui"
-    echo "  all            Deploy all backend services"
+    echo "  service-a         Deploy service-a"
+    echo "  service-b         Deploy service-b"
+    echo "  service-c         Deploy service-c"
+    echo "  envoy-gateway     Deploy envoy-gateway"
+    echo "  agent-simulator   Deploy agent-simulator"
+    echo "  judgment-ui       Deploy judgment-ui"
+    echo "  gov-ui            Deploy gov-ui"
+    echo "  all               Deploy all backend services"
     echo ""
     echo "Commands for 'local':"
     echo "  (none)         docker-compose up"
@@ -165,7 +185,9 @@ usage() {
     echo ""
     echo "Examples:"
     echo "  $0 prod service-a    # Deploy service-a to Cloud Run"
-    echo "  $0 prod all          # Deploy all services"
+    echo "  $0 prod judgment-ui  # Deploy judgment-ui to Cloud Run"
+    echo "  $0 prod gov-ui       # Deploy gov-ui to Cloud Run"
+    echo "  $0 prod all          # Deploy all backend services"
     echo "  $0 local             # Start local environment"
     echo "  $0 local down        # Stop local environment"
 }

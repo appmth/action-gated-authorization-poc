@@ -77,6 +77,7 @@ logs/
 
 # Test output
 *_output.txt
+service-b/error.txt
 
 # Playwright
 test-results/
@@ -91,5 +92,15 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 
+# Docker
+*.tar
+docker-compose.override.yml
+
 # Claude Code
 .claude/settings.local.json
+
+# Demo
+demo/.venv/
+demo/narration.mp3
+demo/movie/
+demo/statistic/*.png

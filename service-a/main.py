@@ -1,9 +1,10 @@
+import asyncio
 import hashlib
 import json
+import logging
 import os
 import time
 import uuid
-from collections import deque
 from datetime import datetime, timedelta, timezone
 import jwt
 from cryptography.hazmat.primitives import serialization
@@ -18,6 +19,8 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 def log_event(
@@ -69,6 +72,25 @@ def generate_ctx_hash(context: dict) -> str:
     ctx_str = json.dumps(context, sort_keys=True)
     return hashlib.sha256(ctx_str.encode()).hexdigest()
 
+
+def map_action_to_tool_and_action(action: str) -> tuple[str, str]:
+    """action を tool と action_mapped に変換する
+
+    Args:
+        action: 入力アクション名（例: "get_resident_info"）
+
+    Returns:
+        (tool, action_mapped) のタプル
+        例: ("resident", "read")
+    """
+    action_mapping = {
+        "get_resident_info": ("resident", "read"),
+        "read_resident_record": ("resident", "read_full"),
+        "update_benefit_status": ("benefit", "update"),
+        "send_official_notice": ("notify", "send"),
+    }
+    return action_mapping.get(action, (action, action))
+
 # PDP_URL はベースURLのみ（パスはコード側で付与）
 PDP_BASE_URL = os.getenv("PDP_URL", "http://localhost:8181")
 PDP_DECISION_PATH = "/v1/data/authorization/decision"
@@ -85,7 +107,7 @@ VERTEX_LOCATION = os.getenv("VERTEX_LOCATION", "asia-northeast1")
 VERTEX_MODEL = os.getenv("VERTEX_MODEL", "gemini-2.0-flash")
 
 # Allowed action / context keys for validation
-ALLOWED_ACTIONS = {"get_resident_info"}
+ALLOWED_ACTIONS = {"get_resident_info", "read_resident_record", "update_benefit_status", "send_official_notice"}
 ALLOWED_CONTEXT_KEYS = {"purpose", "time", "data_sensitivity"}
 
 
@@ -100,6 +122,7 @@ class AuthorizeRequest(BaseModel):
     action: str
     context: Context
     request_id: str | None = Field(default_factory=lambda: str(uuid.uuid4()))
+    agent_role: str = Field(default="assistant")
 
 
 class AuthorizeResponse(BaseModel):
@@ -180,6 +203,9 @@ class ExecuteResponse(BaseModel):
 # scope と path のマッピング
 SCOPE_TO_PATHS = {
     "execute:get_resident_info": ["/resident-info"],
+    "execute:read_resident_record": ["/resident-record"],
+    "execute:update_benefit_status": ["/benefit-status"],
+    "execute:send_official_notice": ["/official-notice"],
 }
 
 
@@ -242,6 +268,82 @@ def register_jti(jti: str, jwt_exp_timestamp: int) -> bool:
     return create_if_not_exists(transaction)
 
 
+JUDGMENT_EVENTS_COLLECTION = "judgment_events"
+
+
+def write_judgment_to_firestore(
+    request_id: str,
+    agent_id: str,
+    agent_role: str,
+    tool: str,
+    action: str,
+    decision: str,
+    reason: str,
+    blocked_layer: str = "L1 Judgment",
+    execution_status: str | None = None,
+    jti: str | None = None,
+    context: dict | None = None,
+    policy_id: str | None = None,
+    policy_tags: list | None = None,
+):
+    """Write a judgment event document to Firestore.
+
+    This is called in a fire-and-forget manner. Errors are logged but never
+    propagated so that the API response is not blocked.
+    """
+    try:
+        db, _ = get_firestore_client()
+        now = datetime.now(timezone.utc)
+        doc_ref = db.collection(JUDGMENT_EVENTS_COLLECTION).document(request_id)
+        doc_ref.set({
+            "request_id": request_id,
+            "created_at": firestore.SERVER_TIMESTAMP,
+            "ttl_at": now + timedelta(hours=72),
+            "agent_id": agent_id,
+            "agent_role": agent_role,
+            "tool": tool,
+            "action": action,
+            "decision": decision,
+            "reason": reason,
+            "blocked_layer": blocked_layer,
+            "execution_status": execution_status,
+            "jti": jti,
+            "context": context or {},
+            "policy_id": policy_id,
+            "policy_tags": policy_tags or [],
+        })
+    except Exception:
+        logger.exception("Failed to write judgment event to Firestore (request_id=%s)", request_id)
+
+
+def update_judgment_in_firestore(
+    request_id: str,
+    execution_status: str,
+    jti: str | None = None,
+):
+    """Update an existing judgment_events document with execution result.
+
+    Errors are logged but never propagated.
+    """
+    try:
+        db, _ = get_firestore_client()
+        doc_ref = db.collection(JUDGMENT_EVENTS_COLLECTION).document(request_id)
+        update_fields: dict = {
+            "execution_status": execution_status,
+        }
+        if jti is not None:
+            update_fields["jti"] = jti
+        doc_ref.update(update_fields)
+    except Exception:
+        logger.exception("Failed to update judgment event in Firestore (request_id=%s)", request_id)
+
+
+def _firestore_fire_and_forget(func, *args, **kwargs):
+    """Run a blocking Firestore write in a background thread so the API response is not delayed."""
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, lambda: func(*args, **kwargs))
+
+
 class ActionRequest(BaseModel):
     context: Context
 
@@ -269,34 +371,69 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# インメモリストア（最新100件を保持）
-judgment_store: deque[dict] = deque(maxlen=100)
-
-
-def store_judgment(
-    request_id: str,
-    action: str,
-    context: dict,
-    decision: dict,
-    pep_enforcement: dict,
-    tool_result: dict | None = None,
-    trace: list[dict] | None = None,
-):
-    """Judgment をインメモリに保存"""
-    judgment = {
-        "request_id": request_id,
-        "created_at": datetime.utcnow().isoformat() + "Z",
-        "action": action,
-        "context": context,
-        "decision": decision,
-        "reason_short": decision.get("reason", "")[:80],
-        "policy_version": "1.0.0",  # PoC では固定
-        "pep_enforcement": pep_enforcement,
-        "tool_result": tool_result,
-        "trace": trace or [],
-    }
-    judgment_store.appendleft(judgment)
-    return judgment
+# Agent インメモリストア
+agents: dict[str, dict] = {
+    "cs-frontdesk": {
+        "id": "cs-frontdesk",
+        "name": "cs-frontdesk",
+        "display_name": "窓口対応エージェント",
+        "role": "Frontdesk",
+        "status": "active",
+        "last_seen": None,
+        "banned_reason": None,
+        "banned_at": None,
+    },
+    "cs-night": {
+        "id": "cs-night",
+        "name": "cs-night",
+        "display_name": "夜間対応エージェント",
+        "role": "Frontdesk",
+        "status": "active",
+        "last_seen": None,
+        "banned_reason": None,
+        "banned_at": None,
+    },
+    "benefit-admin": {
+        "id": "benefit-admin",
+        "name": "benefit-admin",
+        "display_name": "給付管理エージェント",
+        "role": "Backoffice",
+        "status": "active",
+        "last_seen": None,
+        "banned_reason": None,
+        "banned_at": None,
+    },
+    "benefit-assistant": {
+        "id": "benefit-assistant",
+        "name": "benefit-assistant",
+        "display_name": "給付窓口エージェント",
+        "role": "Frontdesk",
+        "status": "active",
+        "last_seen": None,
+        "banned_reason": None,
+        "banned_at": None,
+    },
+    "audit-bot": {
+        "id": "audit-bot",
+        "name": "audit-bot",
+        "display_name": "監査エージェント",
+        "role": "Auditor",
+        "status": "active",
+        "last_seen": None,
+        "banned_reason": None,
+        "banned_at": None,
+    },
+    "notify-agent": {
+        "id": "notify-agent",
+        "name": "notify-agent",
+        "display_name": "通知エージェント",
+        "role": "Notifier",
+        "status": "active",
+        "last_seen": None,
+        "banned_reason": None,
+        "banned_at": None,
+    },
+}
 
 
 class PDPError(Exception):
@@ -615,13 +752,35 @@ async def authorize(request: AuthorizeRequest):
     """
     request_id = request.request_id or str(uuid.uuid4())
     context_dict = request.context.model_dump()
-    
+
     log_event(
         phase="AUTHZ_REQUEST",
         request_id=request_id,
         action=request.action,
         context=context_dict,
     )
+
+    # BAN チェック
+    if request.agent_role in agents and agents[request.agent_role]["status"] == "banned":
+        banned_reason = agents[request.agent_role].get("banned_reason", "unknown")
+        decision_dict = {"allow": False, "reason": f"Denied: agent is banned ({banned_reason})"}
+        tool_mapped, action_mapped = map_action_to_tool_and_action(request.action)
+        _firestore_fire_and_forget(
+            write_judgment_to_firestore,
+            request_id=request_id,
+            agent_id=request.agent_id,
+            agent_role=request.agent_role,
+            tool=tool_mapped,
+            action=action_mapped,
+            decision="DENY",
+            reason=f"Denied: agent is banned ({banned_reason})",
+            context=context_dict,
+        )
+        return AuthorizeResponse(
+            request_id=request_id,
+            decision="deny",
+            reason=f"Denied: agent is banned ({banned_reason})"
+        )
 
     try:
         decision = await call_pdp(request.action, context_dict)
@@ -665,25 +824,19 @@ async def authorize(request: AuthorizeRequest):
                 reason=decision.reason,
             )
 
-            now_str = datetime.utcnow().isoformat() + "Z"
-            store_judgment(
+            tool_mapped, action_mapped = map_action_to_tool_and_action(request.action)
+            _firestore_fire_and_forget(
+                write_judgment_to_firestore,
                 request_id=request_id,
-                action=request.action,
+                agent_id=request.agent_id,
+                agent_role=request.agent_role,
+                tool=tool_mapped,
+                action=action_mapped,
+                decision="ALLOW",
+                reason=decision.reason,
                 context=context_dict,
-                decision=decision_dict,
-                pep_enforcement={
-                    "pdp_called": True,
-                    "tool_called": False,
-                    "jwt_issued": True,
-                    "side_effects": "none",
-                },
-                tool_result=None,
-                trace=[
-                    {"step": "Request Received", "at": now_str, "status": "completed"},
-                    {"step": "PDP Consulted", "at": now_str, "status": "completed", "note": "Policy evaluated"},
-                    {"step": "Decision: ALLOW", "at": now_str, "status": "completed", "note": decision.reason[:50]},
-                    {"step": "JWT Issued", "at": now_str, "status": "completed", "note": "execution_handle issued (60s TTL)"},
-                ],
+                policy_id=decision.policy_id,
+                policy_tags=decision.tags,
             )
 
             return AuthorizeResponse(
@@ -708,25 +861,19 @@ async def authorize(request: AuthorizeRequest):
                 reason=decision.reason,
             )
 
-            now_str = datetime.utcnow().isoformat() + "Z"
-            store_judgment(
+            tool_mapped, action_mapped = map_action_to_tool_and_action(request.action)
+            _firestore_fire_and_forget(
+                write_judgment_to_firestore,
                 request_id=request_id,
-                action=request.action,
+                agent_id=request.agent_id,
+                agent_role=request.agent_role,
+                tool=tool_mapped,
+                action=action_mapped,
+                decision="DENY",
+                reason=decision.reason,
                 context=context_dict,
-                decision=decision_dict,
-                pep_enforcement={
-                    "pdp_called": True,
-                    "tool_called": False,
-                    "jwt_issued": False,
-                    "side_effects": "none",
-                },
-                tool_result=None,
-                trace=[
-                    {"step": "Request Received", "at": now_str, "status": "completed"},
-                    {"step": "PDP Consulted", "at": now_str, "status": "completed", "note": "Policy evaluated"},
-                    {"step": "Decision: DENY", "at": now_str, "status": "blocked", "note": decision.reason[:50]},
-                    {"step": "Tool Execution", "at": now_str, "status": "skipped", "note": "Not called due to DENY"},
-                ],
+                policy_id=decision.policy_id,
+                policy_tags=decision.tags,
             )
 
             return AuthorizeResponse(
@@ -821,6 +968,12 @@ async def execute(request: ExecuteRequest):
                 outcome="success",
                 tool={"endpoint": tool_result.endpoint},
             )
+            _firestore_fire_and_forget(
+                update_judgment_in_firestore,
+                request_id=request_id,
+                execution_status="success",
+                jti=jti,
+            )
             return ExecuteResponse(
                 request_id=request_id,
                 status="success",
@@ -833,6 +986,12 @@ async def execute(request: ExecuteRequest):
                 reason=f"tool error: {tool_result.error_type}",
                 outcome="failed",
                 error_type=tool_result.error_type,
+            )
+            _firestore_fire_and_forget(
+                update_judgment_in_firestore,
+                request_id=request_id,
+                execution_status="failed",
+                jti=jti,
             )
             return ExecuteResponse(
                 request_id=request_id,
@@ -851,27 +1010,679 @@ async def execute(request: ExecuteRequest):
 
 @app.get("/judgments")
 def list_judgments(limit: int = 20):
-    """Judgment 一覧を取得"""
-    items = list(judgment_store)[:limit]
-    return [
-        {
-            "request_id": j["request_id"],
-            "action": j["action"],
-            "result": "ALLOW" if j["decision"]["allow"] else "DENY",
-            "reason_short": j["reason_short"],
-            "created_at": j["created_at"],
-        }
-        for j in items
-    ]
+    """Judgment 一覧を取得（Firestore から読み込み）"""
+    limit = min(max(limit, 1), 100)
+    try:
+        db, _ = get_firestore_client()
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+        query = collection_ref.order_by("created_at", direction=firestore.Query.DESCENDING).limit(limit)
+        docs = list(query.stream())
+        return [_firestore_doc_to_judgment_event(doc) for doc in docs]
+    except Exception:
+        logger.exception("Failed to query judgments from Firestore")
+        return []
 
 
 @app.get("/judgments/{request_id}")
 def get_judgment(request_id: str):
-    """Judgment 詳細を取得"""
-    for j in judgment_store:
-        if j["request_id"] == request_id:
-            return j
-    raise HTTPException(status_code=404, detail="Judgment not found")
+    """Judgment 詳細を取得（Firestore から読み込み）"""
+    try:
+        db, _ = get_firestore_client()
+        doc = db.collection(JUDGMENT_EVENTS_COLLECTION).document(request_id).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Judgment not found")
+        return _firestore_doc_to_judgment_event(doc)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to get judgment from Firestore (request_id=%s)", request_id)
+        raise HTTPException(status_code=404, detail="Judgment not found")
+
+
+def _encode_cursor(created_at_str: str, request_id: str) -> str:
+    """Encode a pagination cursor as base64."""
+    payload = json.dumps({"ts": created_at_str, "id": request_id})
+    return base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+
+
+def _decode_cursor(cursor: str) -> tuple[str, str]:
+    """Decode a pagination cursor. Returns (created_at_str, request_id)."""
+    # Restore padding
+    padded = cursor + "=" * (-len(cursor) % 4)
+    payload = json.loads(base64.urlsafe_b64decode(padded).decode())
+    return payload["ts"], payload["id"]
+
+
+def _firestore_doc_to_judgment_event(doc) -> dict:
+    """Convert a Firestore document snapshot to a JudgmentEvent-compatible dict."""
+    d = doc.to_dict()
+    # created_at may be a Firestore Timestamp or None
+    created_at = d.get("created_at")
+    if created_at is not None and hasattr(created_at, "isoformat"):
+        ts = created_at.isoformat()
+    else:
+        ts = d.get("ttl_at", datetime.now(timezone.utc)).isoformat() if created_at is None else str(created_at)
+
+    return {
+        "id": d.get("request_id", doc.id),
+        "ts": ts,
+        "agent_id": d.get("agent_id", ""),
+        "agent_role": d.get("agent_role", ""),
+        "tool": d.get("tool", ""),
+        "action": d.get("action", ""),
+        "decision": d.get("decision", ""),
+        "reason": d.get("reason", ""),
+        "policy_id": d.get("policy_id"),
+        "policy_tags": d.get("policy_tags", []),
+        "context": d.get("context", {}),
+        "blocked_layer": d.get("blocked_layer", "L1 Judgment"),
+        "execution_status": d.get("execution_status"),
+        "jti": d.get("jti"),
+    }
+
+
+@app.get("/activity")
+def get_activity(
+    limit: int = 50,
+    cursor: str | None = None,
+    decision: str | None = None,
+    agent_id: str | None = None,
+    tool: str | None = None,
+):
+    """Activity log endpoint with cursor-based pagination from Firestore.
+
+    Composite indexes needed in Firestore:
+    - judgment_events: created_at DESC (default ordering)
+    - judgment_events: agent_id ASC, created_at DESC
+    - judgment_events: decision ASC, created_at DESC
+    - judgment_events: tool ASC, created_at DESC
+    """
+    limit = min(max(limit, 1), 200)
+
+    try:
+        db, _ = get_firestore_client()
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+
+        # Build query with optional filters
+        query = collection_ref
+        if decision is not None:
+            query = query.where("decision", "==", decision)
+        if agent_id is not None:
+            query = query.where("agent_id", "==", agent_id)
+        if tool is not None:
+            query = query.where("tool", "==", tool)
+
+        # Order by created_at desc
+        query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
+
+        # Apply cursor for pagination (next page only, since ordering is DESC)
+        if cursor is not None:
+            try:
+                cursor_ts, cursor_id = _decode_cursor(cursor)
+                # Fetch the cursor document to use as a snapshot
+                cursor_doc = collection_ref.document(cursor_id).get()
+                if cursor_doc.exists:
+                    query = query.start_after(cursor_doc)
+            except Exception:
+                pass  # Invalid cursor, ignore and return from beginning
+
+        # Fetch limit + 1 to check if there are more results
+        docs = list(query.limit(limit + 1).stream())
+
+        has_more = len(docs) > limit
+        docs = docs[:limit]
+
+        items = [_firestore_doc_to_judgment_event(doc) for doc in docs]
+
+        next_cursor = None
+        if has_more and docs:
+            last_doc_dict = docs[-1].to_dict()
+            last_created_at = last_doc_dict.get("created_at")
+            last_ts_str = last_created_at.isoformat() if last_created_at and hasattr(last_created_at, "isoformat") else ""
+            last_id = last_doc_dict.get("request_id", docs[-1].id)
+            next_cursor = _encode_cursor(last_ts_str, last_id)
+
+        return {
+            "items": items,
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+        }
+
+    except Exception as e:
+        logger.exception("Failed to query activity from Firestore")
+        return {
+            "items": [],
+            "next_cursor": None,
+            "has_more": False,
+        }
+
+
+@app.get("/metrics/overview")
+def get_metrics_overview():
+    """Firestore-based metrics overview for the last 24 hours."""
+    try:
+        db, _ = get_firestore_client()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+
+        query = collection_ref.where("created_at", ">=", cutoff)
+        docs = list(query.stream())
+
+        total_events = len(docs)
+        allow_count = 0
+        deny_count = 0
+        agent_ids = set()
+
+        for doc in docs:
+            d = doc.to_dict()
+            decision = d.get("decision", "")
+            if decision == "ALLOW":
+                allow_count += 1
+            elif decision == "DENY":
+                deny_count += 1
+            aid = d.get("agent_id", "")
+            if aid:
+                agent_ids.add(aid)
+
+        deny_rate = round(deny_count / total_events * 100, 1) if total_events > 0 else 0.0
+
+        return {
+            "total_events": total_events,
+            "allow_count": allow_count,
+            "deny_count": deny_count,
+            "deny_rate": deny_rate,
+            "active_agents": len(agent_ids),
+            "period": "last_24h",
+        }
+    except Exception:
+        logger.exception("Failed to query metrics/overview from Firestore")
+        return {
+            "total_events": 0,
+            "allow_count": 0,
+            "deny_count": 0,
+            "deny_rate": 0.0,
+            "active_agents": 0,
+            "period": "last_24h",
+        }
+
+
+@app.get("/metrics/agents")
+def get_metrics_agents():
+    """Firestore-based per-agent metrics for the last 24 hours."""
+    try:
+        db, _ = get_firestore_client()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+
+        query = collection_ref.where("created_at", ">=", cutoff)
+        docs = list(query.stream())
+
+        agent_stats: dict[str, dict] = {}
+        for doc in docs:
+            d = doc.to_dict()
+            aid = d.get("agent_id", "unknown")
+            if aid not in agent_stats:
+                agent_stats[aid] = {"total": 0, "allow_count": 0, "deny_count": 0}
+            agent_stats[aid]["total"] += 1
+            decision = d.get("decision", "")
+            if decision == "ALLOW":
+                agent_stats[aid]["allow_count"] += 1
+            elif decision == "DENY":
+                agent_stats[aid]["deny_count"] += 1
+
+        result = []
+        for aid, stats in agent_stats.items():
+            deny_rate = round(stats["deny_count"] / stats["total"] * 100, 1) if stats["total"] > 0 else 0.0
+            result.append({
+                "agent_id": aid,
+                "total": stats["total"],
+                "allow_count": stats["allow_count"],
+                "deny_count": stats["deny_count"],
+                "deny_rate": deny_rate,
+            })
+
+        return result
+    except Exception:
+        logger.exception("Failed to query metrics/agents from Firestore")
+        return []
+
+
+@app.get("/metrics/reasons")
+def get_metrics_reasons():
+    """Firestore-based deny reason breakdown for the last 24 hours."""
+    try:
+        db, _ = get_firestore_client()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+
+        query = collection_ref.where("created_at", ">=", cutoff).where("decision", "==", "DENY")
+        docs = list(query.stream())
+
+        reason_counts: dict[str, int] = {}
+        total_deny = 0
+        for doc in docs:
+            d = doc.to_dict()
+            reason = d.get("reason", "unknown")
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            total_deny += 1
+
+        result = []
+        for reason, count in reason_counts.items():
+            pct = round(count / total_deny * 100, 1) if total_deny > 0 else 0.0
+            result.append({
+                "reason": reason,
+                "count": count,
+                "pct": pct,
+            })
+
+        return result
+    except Exception:
+        logger.exception("Failed to query metrics/reasons from Firestore")
+        return []
+
+
+@app.get("/metrics/decision-distribution")
+def get_decision_distribution():
+    """判定結果の分布（ALLOW / DENY のパーセンテージ）を取得（Firestore、直近24h）"""
+    try:
+        db, _ = get_firestore_client()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+        docs = list(collection_ref.where("created_at", ">=", cutoff).stream())
+
+        total = len(docs)
+        if total == 0:
+            return {"allow_pct": 0, "deny_pct": 0, "total_count": 0}
+
+        allow_count = sum(1 for doc in docs if doc.to_dict().get("decision") == "ALLOW")
+        allow_pct = round(allow_count / total * 100)
+        deny_pct = 100 - allow_pct
+
+        return {"allow_pct": allow_pct, "deny_pct": deny_pct, "total_count": total}
+    except Exception:
+        logger.exception("Failed to query metrics/decision-distribution from Firestore")
+        return {"allow_pct": 0, "deny_pct": 0, "total_count": 0}
+
+
+@app.get("/metrics/agent-deny-rate")
+def get_agent_deny_rate():
+    """エージェント別の Deny 率を取得（Firestore、直近24h）"""
+    try:
+        db, _ = get_firestore_client()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+        docs = list(collection_ref.where("created_at", ">=", cutoff).stream())
+
+        agent_stats: dict[str, dict] = {}
+        for doc in docs:
+            d = doc.to_dict()
+            agent = d.get("agent_id", "unknown")
+            if agent not in agent_stats:
+                agent_stats[agent] = {"total": 0, "deny": 0}
+            agent_stats[agent]["total"] += 1
+            if d.get("decision") == "DENY":
+                agent_stats[agent]["deny"] += 1
+
+        result = []
+        for agent, stats in agent_stats.items():
+            deny_pct = round(stats["deny"] / stats["total"] * 100) if stats["total"] > 0 else 0
+            result.append({"agent": agent, "deny_pct": deny_pct})
+
+        return result
+    except Exception:
+        logger.exception("Failed to query metrics/agent-deny-rate from Firestore")
+        return []
+
+
+@app.get("/metrics/block-reason-breakdown")
+def get_block_reason_breakdown():
+    """Deny 理由の内訳を取得（Firestore、直近24h）"""
+    try:
+        db, _ = get_firestore_client()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+        docs = list(collection_ref.where("created_at", ">=", cutoff).where("decision", "==", "DENY").stream())
+
+        total_deny = len(docs)
+        if total_deny == 0:
+            return []
+
+        reason_stats: dict[str, int] = {}
+        for doc in docs:
+            d = doc.to_dict()
+            reason = d.get("reason", "unknown")[:80]
+            reason_stats[reason] = reason_stats.get(reason, 0) + 1
+
+        result = []
+        for reason, count in reason_stats.items():
+            pct = round(count / total_deny * 100)
+            result.append({"reason": reason, "count": count, "pct": pct})
+
+        return result
+    except Exception:
+        logger.exception("Failed to query metrics/block-reason-breakdown from Firestore")
+        return []
+
+
+@app.get("/metrics/block-layer-breakdown")
+def get_block_layer_breakdown():
+    """Block レイヤーの内訳を取得（Firestore、直近24h）"""
+    try:
+        db, _ = get_firestore_client()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+        docs = list(collection_ref.where("created_at", ">=", cutoff).stream())
+
+        total = len(docs)
+        if total == 0:
+            return []
+
+        layer_stats: dict[str, int] = {}
+        for doc in docs:
+            d = doc.to_dict()
+            layer = d.get("blocked_layer", "L1 Judgment")
+            layer_stats[layer] = layer_stats.get(layer, 0) + 1
+
+        result = []
+        for layer, count in layer_stats.items():
+            pct = round(count / total * 100)
+            result.append({"layer": layer, "count": count, "pct": pct})
+
+        return result
+    except Exception:
+        logger.exception("Failed to query metrics/block-layer-breakdown from Firestore")
+        return []
+
+
+@app.get("/metrics/tool-risk-profile")
+def get_tool_risk_profile():
+    """Tool 別のリスクプロファイルを取得（Firestore、直近24h）"""
+    try:
+        db, _ = get_firestore_client()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+        docs = list(collection_ref.where("created_at", ">=", cutoff).stream())
+
+        if not docs:
+            return []
+
+        tool_stats: dict[str, dict] = {}
+        for doc in docs:
+            d = doc.to_dict()
+            tool = d.get("tool", "unknown")
+            if tool not in tool_stats:
+                tool_stats[tool] = {"total": 0, "deny_count": 0}
+            tool_stats[tool]["total"] += 1
+            if d.get("decision") == "DENY":
+                tool_stats[tool]["deny_count"] += 1
+
+        result = []
+        for tool, stats in tool_stats.items():
+            deny_pct = round(stats["deny_count"] / stats["total"] * 100) if stats["total"] > 0 else 0
+            result.append({
+                "tool": tool,
+                "total": stats["total"],
+                "deny_count": stats["deny_count"],
+                "deny_pct": deny_pct,
+            })
+
+        result.sort(key=lambda x: x["deny_pct"], reverse=True)
+        return result
+    except Exception:
+        logger.exception("Failed to query metrics/tool-risk-profile from Firestore")
+        return []
+
+
+@app.get("/metrics/behavior_heatmap")
+def get_behavior_heatmap(window: str = "24h", bucket: str = "1h"):
+    """Agent behavior heatmap: deny_rate per agent per 1-hour bucket (last 24h)."""
+    try:
+        db, _ = get_firestore_client()
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(hours=24)
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+        docs = list(collection_ref.where("created_at", ">=", cutoff).stream())
+
+        # Generate 24 bucket start timestamps (each 1 hour)
+        bucket_starts: list[str] = []
+        for i in range(24):
+            t = cutoff + timedelta(hours=i)
+            bucket_starts.append(t.strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+        # Aggregate per agent per bucket
+        agent_data: dict[str, dict] = {}
+        five_min_ago = now - timedelta(minutes=5)
+
+        for doc in docs:
+            d = doc.to_dict()
+            agent_id = d.get("agent_id", "unknown")
+            decision = d.get("decision", "")
+            created_at = d.get("created_at")
+
+            if agent_id not in agent_data:
+                agent_data[agent_id] = {
+                    "cells": [{} for _ in range(24)],
+                    "total_allow": 0,
+                    "total_deny": 0,
+                    "last_5m_deny": 0,
+                }
+
+            if created_at is not None and hasattr(created_at, "timestamp"):
+                ts = created_at.timestamp()
+                created_dt = created_at
+            else:
+                continue
+
+            # Determine bucket index
+            elapsed = ts - cutoff.timestamp()
+            bucket_idx = int(elapsed // 3600)
+            if bucket_idx < 0 or bucket_idx >= 24:
+                continue
+
+            cell = agent_data[agent_id]["cells"][bucket_idx]
+            if "allow" not in cell:
+                cell["allow"] = 0
+                cell["deny"] = 0
+
+            if decision == "ALLOW":
+                cell["allow"] += 1
+                agent_data[agent_id]["total_allow"] += 1
+            elif decision == "DENY":
+                cell["deny"] += 1
+                agent_data[agent_id]["total_deny"] += 1
+
+            # Last 5 min deny count
+            if decision == "DENY" and hasattr(created_dt, "timestamp") and created_dt.timestamp() >= five_min_ago.timestamp():
+                agent_data[agent_id]["last_5m_deny"] += 1
+
+        # Ensure all registered agents appear in the heatmap
+        for agent_id, agent_info in agents.items():
+            if agent_id not in agent_data:
+                agent_data[agent_id] = {
+                    "cells": [{} for _ in range(24)],
+                    "total_allow": 0,
+                    "total_deny": 0,
+                    "last_5m_deny": 0,
+                }
+
+        # Build response
+        result_agents = []
+        for agent_id, data in agent_data.items():
+            total_allow = data["total_allow"]
+            total_deny = data["total_deny"]
+            summary_total = total_allow + total_deny
+            summary_deny_rate = round(total_deny / summary_total * 100, 1) if summary_total > 0 else 0.0
+
+            # Get agent info from in-memory store
+            agent_info = agents.get(agent_id, {})
+            display_name = agent_info.get("display_name", agent_id)
+            role = agent_info.get("role", "unknown")
+            status = agent_info.get("status", "active")
+
+            # Build cells array
+            cells = []
+            for cell in data["cells"]:
+                if not cell:
+                    cells.append(None)
+                else:
+                    a = cell.get("allow", 0)
+                    d_count = cell.get("deny", 0)
+                    t = a + d_count
+                    dr = round(d_count / t * 100, 1) if t > 0 else 0.0
+                    cells.append({"allow": a, "deny": d_count, "deny_rate": dr, "total": t})
+
+            result_agents.append({
+                "agent_id": agent_id,
+                "display_name": display_name,
+                "role": role,
+                "status": status,
+                "summary_deny_rate": summary_deny_rate,
+                "summary_total": summary_total,
+                "summary_deny": total_deny,
+                "last_5m_deny": data["last_5m_deny"],
+                "cells": cells,
+            })
+
+        # Sort by deny_rate descending
+        result_agents.sort(key=lambda x: x["summary_deny_rate"], reverse=True)
+
+        return {
+            "window": window,
+            "bucket_size": bucket,
+            "bucket_starts": bucket_starts,
+            "agents": result_agents,
+        }
+    except Exception:
+        logger.exception("Failed to query metrics/behavior_heatmap from Firestore")
+        return {
+            "window": window,
+            "bucket_size": bucket,
+            "bucket_starts": [],
+            "agents": [],
+        }
+
+
+@app.get("/metrics/agent-timeline")
+def get_agent_timeline():
+    """Agent 別の時系列エントリを取得（Firestore、直近24h）"""
+    try:
+        db, _ = get_firestore_client()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+        docs = list(collection_ref.where("created_at", ">=", cutoff).stream())
+
+        agent_entries: dict[str, list] = {}
+        for doc in docs:
+            d = doc.to_dict()
+            agent = d.get("agent_id", "unknown")
+            if agent not in agent_entries:
+                agent_entries[agent] = []
+
+            created_at = d.get("created_at")
+            if created_at is not None and hasattr(created_at, "isoformat"):
+                ts = created_at.isoformat()
+            else:
+                ts = str(created_at) if created_at else ""
+
+            is_ban = d.get("action") == "ban"
+            agent_entries[agent].append({
+                "ts": ts,
+                "decision": d.get("decision", ""),
+                "is_ban": is_ban,
+            })
+
+        result = []
+        for agent, entries in agent_entries.items():
+            result.append({"agent": agent, "entries": entries})
+
+        return result
+    except Exception:
+        logger.exception("Failed to query metrics/agent-timeline from Firestore")
+        return []
+
+
+class BanRequest(BaseModel):
+    reason: str
+
+
+@app.get("/agents")
+def list_agents():
+    """Agent 一覧を取得（allow_24h/deny_24h は Firestore から集計）"""
+    # Firestore から直近24hの agent_id 別集計を取得
+    agent_counts: dict[str, dict] = {}
+    try:
+        db, _ = get_firestore_client()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        collection_ref = db.collection(JUDGMENT_EVENTS_COLLECTION)
+        docs = list(collection_ref.where("created_at", ">=", cutoff).stream())
+        for doc in docs:
+            d = doc.to_dict()
+            aid = d.get("agent_id", "")
+            if not aid:
+                continue
+            if aid not in agent_counts:
+                agent_counts[aid] = {"allow": 0, "deny": 0}
+            if d.get("decision") == "ALLOW":
+                agent_counts[aid]["allow"] += 1
+            elif d.get("decision") == "DENY":
+                agent_counts[aid]["deny"] += 1
+    except Exception:
+        logger.exception("Failed to query agent counts from Firestore")
+
+    result = []
+    for agent_id, agent in agents.items():
+        counts = agent_counts.get(agent_id, {"allow": 0, "deny": 0})
+        result.append({
+            **agent,
+            "allow_24h": counts["allow"],
+            "deny_24h": counts["deny"],
+        })
+    return result
+
+
+@app.post("/agents/{agent_id}/ban")
+def ban_agent(agent_id: str, request: BanRequest):
+    """Agent を BAN する"""
+    if agent_id not in agents:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agents[agent_id]["status"] == "banned":
+        raise HTTPException(status_code=409, detail="Agent already banned")
+
+    now_str = datetime.utcnow().isoformat() + "Z"
+    agents[agent_id]["status"] = "banned"
+    agents[agent_id]["banned_reason"] = request.reason
+    agents[agent_id]["banned_at"] = now_str
+
+    # BAN イベントを Firestore に記録
+    ban_request_id = str(uuid.uuid4())
+    _firestore_fire_and_forget(
+        write_judgment_to_firestore,
+        request_id=ban_request_id,
+        agent_id=agent_id,
+        agent_role=agent_id,
+        tool="system",
+        action="ban",
+        decision="DENY",
+        reason=f"Agent banned: {request.reason}",
+        blocked_layer="L1 Judgment",
+    )
+
+    return {"status": "banned", "agent_id": agent_id, "reason": request.reason}
+
+
+@app.post("/agents/{agent_id}/unban")
+def unban_agent(agent_id: str):
+    """Agent の BAN を解除する"""
+    if agent_id not in agents:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agents[agent_id]["status"] == "active":
+        raise HTTPException(status_code=409, detail="Agent is not banned")
+
+    agents[agent_id]["status"] = "active"
+    agents[agent_id]["banned_reason"] = None
+    agents[agent_id]["banned_at"] = None
+
+    return {"status": "active", "agent_id": agent_id}
 
 
 @app.post("/v1/actions/get_resident_info")
@@ -953,27 +1764,6 @@ async def get_resident_info(request: ActionRequest):
             reason=decision.reason,
         )
 
-        # Judgment を保存（DENY）
-        now = datetime.utcnow().isoformat() + "Z"
-        store_judgment(
-            request_id=request_id,
-            action=action,
-            context=context,
-            decision=decision_dict,
-            pep_enforcement={
-                "pdp_called": True,
-                "tool_called": False,
-                "side_effects": "none",
-            },
-            tool_result=None,
-            trace=[
-                {"step": "Request Received", "at": now, "status": "completed"},
-                {"step": "PDP Consulted", "at": now, "status": "completed", "note": "Policy evaluated"},
-                {"step": "Decision: DENY", "at": now, "status": "blocked", "note": decision.reason[:50]},
-                {"step": "Tool Execution", "at": now, "status": "skipped", "note": "Not called due to DENY"},
-            ],
-        )
-
         raise HTTPException(
             status_code=403,
             detail={
@@ -1032,30 +1822,6 @@ async def get_resident_info(request: ActionRequest):
                 "error_type": tool_result.error_type,
             },
         )
-
-    # Judgment を保存（ALLOW）
-    now = datetime.utcnow().isoformat() + "Z"
-    store_judgment(
-        request_id=request_id,
-        action=action,
-        context=context,
-        decision=decision_dict,
-        pep_enforcement={
-            "pdp_called": True,
-            "tool_called": True,
-            "side_effects": "none",
-        },
-        tool_result={
-            "status_code": tool_result.status_code,
-            "latency_ms": round(tool_result.latency_ms, 2),
-        },
-        trace=[
-            {"step": "Request Received", "at": now, "status": "completed"},
-            {"step": "PDP Consulted", "at": now, "status": "completed", "note": "Policy evaluated"},
-            {"step": "Decision: ALLOW", "at": now, "status": "completed", "note": decision.reason[:50]},
-            {"step": "Tool Execution", "at": now, "status": "completed", "note": "Tool called successfully"},
-        ],
-    )
 
     return {
         "request_id": request_id,
@@ -1244,27 +2010,6 @@ async def plan_and_act(request: PlanRequest):
                 reason=decision.reason,
             )
 
-            # Judgment を保存（DENY）
-            now = datetime.utcnow().isoformat() + "Z"
-            store_judgment(
-                request_id=request_id,
-                action=action,
-                context=context,
-                decision=decision_dict,
-                pep_enforcement={
-                    "pdp_called": True,
-                    "tool_called": False,
-                    "side_effects": "none",
-                },
-                tool_result=None,
-                trace=[
-                    {"step": "Request Received", "at": now, "status": "completed"},
-                    {"step": "PDP Consulted", "at": now, "status": "completed", "note": "Policy evaluated"},
-                    {"step": "Decision: DENY", "at": now, "status": "blocked", "note": decision.reason[:50]},
-                    {"step": "Tool Execution", "at": now, "status": "skipped", "note": "Not called due to DENY"},
-                ],
-            )
-
             per_action_results.append({
                 "action": action,
                 "decision": decision_dict,
@@ -1322,30 +2067,6 @@ async def plan_and_act(request: PlanRequest):
                     "message": f"Tool execution failed: {tool_result.error_type}"
                 },
             )
-
-        # Judgment を保存（ALLOW）
-        now = datetime.utcnow().isoformat() + "Z"
-        store_judgment(
-            request_id=request_id,
-            action=action,
-            context=context,
-            decision=decision_dict,
-            pep_enforcement={
-                "pdp_called": True,
-                "tool_called": True,
-                "side_effects": "none",
-            },
-            tool_result={
-                "status_code": tool_result.status_code,
-                "latency_ms": round(tool_result.latency_ms, 2),
-            },
-            trace=[
-                {"step": "Request Received", "at": now, "status": "completed"},
-                {"step": "PDP Consulted", "at": now, "status": "completed", "note": "Policy evaluated"},
-                {"step": "Decision: ALLOW", "at": now, "status": "completed", "note": decision.reason[:50]},
-                {"step": "Tool Execution", "at": now, "status": "completed", "note": "Tool called successfully"},
-            ],
-        )
 
         # 成功時のみ結果を記録
         per_action_results.append({

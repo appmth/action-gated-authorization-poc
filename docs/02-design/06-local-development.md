@@ -42,7 +42,7 @@ localhost
 | `PDP_URL` | `http://service-b:8080` | OPA への接続先 |
 | `TOOL_URL` | `http://service-c:8080` | Tool 直接呼び出し |
 | `ENVOY_URL` | `http://envoy-gateway:8080` | Envoy 経由の Tool 呼び出し |
-| `FIRESTORE_EMULATOR_HOST` | `host.docker.internal:8080` | Firestore エミュレータ接続 |
+| `FIRESTORE_EMULATOR_HOST` | `firestore-emulator:8080` | Firestore エミュレータ接続 |
 | `GOOGLE_CLOUD_PROJECT` | `aga-poc` | Firestore プロジェクト ID |
 
 ### service-b（PDP / OPA）
@@ -80,11 +80,12 @@ GCP 版との主な差分:
 
 | 項目 | 値 |
 | :--- | :--- |
-| 実行方式 | ホストマシンで `firebase emulators:start` を実行 |
-| ポート | 8086（ホスト側） |
-| コンテナからの接続 | `host.docker.internal:8080` |
+| 実行方式 | docker-compose 内の `firestore-emulator` サービス（`mtlynch/firestore-emulator`） |
+| ポート | 8086（ホスト側）→ 8080（コンテナ内部） |
+| コンテナからの接続 | `firestore-emulator:8080` |
+| プロジェクト ID | `aga-poc` |
 
-Firestore クライアントライブラリは `FIRESTORE_EMULATOR_HOST` 環境変数が設定されている場合、自動的にエミュレータに接続します。service-a のコード内で `AnonymousCredentials` を使用し、GCP 認証をバイパスします。
+docker-compose で自動起動されるため、ホスト側での `firebase emulators:start` は不要です。Firestore クライアントライブラリは `FIRESTORE_EMULATOR_HOST` 環境変数が設定されている場合、自動的にエミュレータに接続します。service-a のコード内で `AnonymousCredentials` を使用し、GCP 認証をバイパスします。
 
 ## 4. ネットワーク構成
 
@@ -98,7 +99,7 @@ Firestore クライアントライブラリは `FIRESTORE_EMULATOR_HOST` 環境�
 │       │                  │                           │
 │       │                  │──HTTP──▶ service-c:8080   │
 │       │                                              │
-│       │──HTTP──▶ host.docker.internal:8080            │
+│       │──HTTP──▶ firestore-emulator:8080               │
 │                  (Firestore Emulator)                │
 └──────────────────────────────────────────────────────┘
 ```
@@ -119,7 +120,7 @@ docker-compose down
 
 ### 前提条件
 - Docker Desktop が起動していること
-- Firestore を使用する場合: ホストで `firebase emulators:start` を実行済み
+- `.env.local` ファイルが存在すること（なければ `.env.local.example` からコピー）
 
 ## 6. ヘルスチェック
 

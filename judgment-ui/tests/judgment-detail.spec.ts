@@ -1,27 +1,37 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Judgment Detail Page', () => {
-  test('shows not found message for invalid request_id', async ({ page }) => {
-    await page.goto('http://localhost:3000/judgments/invalid-request-id');
+  test('navigating from activity shows detail with 4 sections', async ({ page }) => {
+    await page.goto('/activity');
+    // Click the first table row to navigate to detail
+    await page.locator('tbody.group.cursor-pointer').first().click();
+    await expect(page).toHaveURL(/.*\/judgments\/.+/);
 
-    // エラーメッセージが表示されることを確認
+    // Overview section with Decision badge
+    await expect(page.getByText(/DENY|ALLOW/).first()).toBeVisible();
+
+    // Reason section
+    await expect(page.getByRole('heading', { name: 'Reason' })).toBeVisible();
+
+    // Policy section
+    await expect(page.getByRole('heading', { name: 'Policy' })).toBeVisible();
+
+    // Context section
+    await expect(page.getByText('Context (sanitized)')).toBeVisible();
+  });
+
+  test('shows not found message for invalid id', async ({ page }) => {
+    await page.goto('/judgments/invalid-id');
     await expect(page.getByText('Judgment not found')).toBeVisible();
   });
 
-  test('has back to dashboard link', async ({ page }) => {
-    await page.goto('http://localhost:3000/judgments/test-id');
-
-    // Back to Dashboard リンクが存在することを確認
-    await expect(page.getByRole('link', { name: 'Back to Dashboard' })).toBeVisible();
-  });
-
-  test('back to dashboard link navigates correctly', async ({ page }) => {
-    await page.goto('http://localhost:3000/judgments/test-id');
-
-    // Back to Dashboard をクリック
-    await page.getByRole('link', { name: 'Back to Dashboard' }).click();
-
-    // ダッシュボードに戻ることを確認
-    await expect(page).toHaveURL(/.*\/dashboard/);
+  test('Back to Activity Log link navigates correctly', async ({ page }) => {
+    await page.goto('/activity');
+    // Navigate to a detail page first
+    await page.locator('tbody.group.cursor-pointer').first().click();
+    await expect(page).toHaveURL(/.*\/judgments\/.+/);
+    // Click back link
+    await page.getByRole('link', { name: /Back to Activity Log/ }).click();
+    await expect(page).toHaveURL(/.*\/activity/);
   });
 });

@@ -1,61 +1,77 @@
 openapi: 3.0.3
 info:
   title: Action Gated Authorization API
-  description: AI Agent の行動を認可・保護・実行するための API 仕様書
-  version: 1.0.0
+  description: |
+    AI Agent の行動を認可・保護・実行するための API 仕様書。
+    Service-A（Judgment/PEP）、Service-B（OPA/PDP）、Service-C（Tool）、Agent Simulator の全エンドポイントを定義します。
+  version: 2.0.0
 servers:
   - url: http://localhost:8080
-    description: ローカル開発環境 (Judgment)
+    description: ローカル開発環境 (Service-A / Judgment)
+  - url: http://localhost:8181
+    description: ローカル開発環境 (Service-B / OPA PDP)
+  - url: http://localhost:8082
+    description: ローカル開発環境 (Service-C / Tool)
+  - url: http://localhost:8090
+    description: ローカル開発環境 (Agent Simulator)
+  - url: https://service-a.action-gated.tech
+    description: 本番環境 (Judgment)
   - url: https://envoy-gateway.action-gated.tech
     description: 本番環境 (Envoy Gateway 経由)
 
-paths:
-  /authorize:
-    post:
-      summary: 認可判定要求
-      description: PDP (OPA) に問い合わせを行い、認可された場合は実行用チケット (JWT) を発行します。
-      tags:
-        - Judgment
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AuthorizeRequest"
-      responses:
-        "200":
-          description: 判定結果（Allow/Deny）
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthorizeResponse"
+tags:
+  - name: Core
+    description: 認可判定・実行の中核エンドポイント（Service-A）
+  - name: Agent Management
+    description: エージェント一覧・BAN/UNBAN 管理（Service-A）
+  - name: Activity
+    description: 判定履歴・アクティビティログ（Service-A）
+  - name: Metrics
+    description: メトリクス・統計情報（Service-A）
+  - name: Direct Action
+    description: PEP 内蔵の直接アクション実行（Service-A）
+  - name: Identity
+    description: JWT 公開鍵・ヘルスチェック（Service-A）
+  - name: PDP
+    description: Policy Decision Point（Service-B / OPA）
+  - name: Tool
+    description: Tool 実行バックエンド（Service-C）
+  - name: Agent Simulator
+    description: トラフィック生成シミュレーター
 
-  /execute:
-    post:
-      summary: ツール実行要求
-      description: |
-        発行された execution_handle (JWT) を検証し、指定した Tool を実行します。
-        tool_request でリクエスト情報（method, path, body）を指定できます。
-        JWT の scope と path の整合性が検証され、不一致の場合は 403 Forbidden が返されます。
+paths:
+  # ============================================================
+  # Service-A: Core
+  # ============================================================
+  /:
+    get:
+      summary: ルートエンドポイント
       tags:
-        - Judgment
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ExecuteRequest"
+        - Identity
       responses:
         "200":
-          description: 実行結果
+          description: サービス情報
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ExecuteResponse"
-        "400":
-          description: 不正なリクエスト（チケット使用済みなど）
-        "403":
-          description: 認可エラー（scope と path の不一致）
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Hello World"
+
+  /health:
+    get:
+      summary: ヘルスチェック
+      tags:
+        - Identity
+      responses:
+        "200":
+          description: 正常
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
 
   /.well-known/jwks.json:
     get:
@@ -69,37 +85,647 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/JWKSResponse"
+
+  /authorize:
+    post:
+      summary: 認可判定要求
+      description: |
+        PDP (OPA) に問い合わせを行い、認可された場合は実行用チケット (JWT) を発行します。
+        BAN されたエージェントの場合は PDP に問い合わせず即座に Deny を返します。
+      tags:
+        - Core
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorizeRequest"
+      responses:
+        "200":
+          description: 判定結果（Allow/Deny）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizeResponse"
+        "503":
+          description: PDP 障害（Fail Closed）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+
+  /execute:
+    post:
+      summary: ツール実行要求
+      description: |
+        発行された execution_handle (JWT) を検証し、指定した Tool を Envoy Gateway 経由で実行します。
+        - JWT の署名（RS256）と有効期限を検証
+        - JWT の audience（envoy-gateway）を検証
+        - scope と tool_request.path の整合性を検証
+        - JTI を Firestore でチェック（一度使用済みのトークンは拒否）
+      tags:
+        - Core
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExecuteRequest"
+      responses:
+        "200":
+          description: 実行結果（success / blocked / failed）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecuteResponse"
+        "500":
+          description: 内部エラー
+
+  # ============================================================
+  # Service-A: Activity / Judgment History
+  # ============================================================
+  /judgments:
+    get:
+      summary: 判定履歴一覧
+      description: Firestore の judgment_events コレクションから判定履歴を新しい順に取得します。
+      tags:
+        - Activity
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 取得件数の上限
+      responses:
+        "200":
+          description: 判定履歴の配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JudgmentEvent"
+
+  /judgments/{request_id}:
+    get:
+      summary: 判定詳細取得
+      description: 特定の判定の詳細を Firestore から取得します。Judgment UI の Detail 画面で使用します。
+      tags:
+        - Activity
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 判定のリクエストID
+      responses:
+        "200":
+          description: 判定詳細
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JudgmentEvent"
+        "404":
+          description: 該当する判定が見つからない
+
+  /activity:
+    get:
+      summary: アクティビティログ取得（ページネーション対応）
+      description: |
+        Firestore の judgment_events コレクションからアクティビティログを取得します。
+        カーソルベースのページネーションに対応。Judgment UI の Activity Log 画面で使用します。
+      tags:
+        - Activity
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+          description: 1ページあたりの取得件数
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: ページネーションカーソル（Base64エンコード済み）。前回レスポンスの next_cursor を指定
+        - name: agent_id
+          in: query
+          schema:
+            type: string
+          description: エージェントIDでフィルタ
+        - name: decision
+          in: query
+          schema:
+            type: string
+            enum: [ALLOW, DENY]
+          description: 判定結果でフィルタ
+        - name: tool
+          in: query
+          schema:
+            type: string
+          description: ツール名でフィルタ
+      responses:
+        "200":
+          description: アクティビティログ（ページネーション付き）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityResponse"
+
+  # ============================================================
+  # Service-A: Agent Management
+  # ============================================================
+  /agents:
+    get:
+      summary: エージェント一覧取得
+      description: |
+        登録済みエージェントの一覧を取得します。
+        allow_24h / deny_24h は Firestore の judgment_events から直近24時間分を集計します。
+      tags:
+        - Agent Management
+      responses:
+        "200":
+          description: エージェント一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Agent"
+
+  /agents/{agent_id}/ban:
+    post:
+      summary: エージェント BAN
+      description: |
+        指定したエージェントを BAN します。
+        BAN されたエージェントは /authorize で PDP に問い合わせず即座に Deny されます。
+        BAN イベントは Firestore にも記録されます。
+      tags:
+        - Agent Management
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: エージェントID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BanRequest"
+      responses:
+        "200":
+          description: BAN 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BanResponse"
+        "404":
+          description: エージェントが見つからない
+        "409":
+          description: 既に BAN 済み
+
+  /agents/{agent_id}/unban:
+    post:
+      summary: エージェント UNBAN
+      description: 指定したエージェントの BAN を解除します。
+      tags:
+        - Agent Management
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: エージェントID
+      responses:
+        "200":
+          description: UNBAN 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnbanResponse"
+        "404":
+          description: エージェントが見つからない
+        "409":
+          description: 現在 BAN されていない
+
+  # ============================================================
+  # Service-A: Metrics
+  # ============================================================
+  /metrics/overview:
+    get:
+      summary: メトリクス概要
+      description: 直近24時間の判定メトリクス概要を取得します。Firestore の judgment_events コレクションから集計。
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: メトリクス概要
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsOverview"
+
+  /metrics/agents:
+    get:
+      summary: エージェント別メトリクス
+      description: 直近24時間のエージェント別判定統計を取得します。Firestore の judgment_events コレクションから集計。
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: エージェント別メトリクスの配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentMetrics"
+
+  /metrics/reasons:
+    get:
+      summary: 理由別メトリクス
+      description: 直近24時間のDENY理由別統計を取得します。Firestore の judgment_events コレクションから集計。
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: 理由別メトリクスの配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReasonMetrics"
+
+  /metrics/decision-distribution:
+    get:
+      summary: 判定分布
+      description: 直近24時間の ALLOW / DENY のパーセンテージを取得します。Judgment UI の Graph 画面（左カラム）で使用します。
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: 判定分布
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionDistribution"
+
+  /metrics/agent-deny-rate:
+    get:
+      summary: エージェント別 Deny 率
+      description: 直近24時間のエージェント別 Deny 率を取得します。Judgment UI の Graph 画面（右カラム）で使用します。
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: エージェント別 Deny 率の配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentDenyRate"
+
+  /metrics/block-reason-breakdown:
+    get:
+      summary: Deny 理由内訳
+      description: 直近24時間の DENY 理由の内訳を取得します。Judgment UI の Governance Insights 画面で使用します。
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: Deny 理由内訳の配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BlockReasonEntry"
+
+  /metrics/block-layer-breakdown:
+    get:
+      summary: Block レイヤー内訳
+      description: 直近24時間の全イベントの blocked_layer 内訳を取得します。Judgment UI の Governance Insights 画面で使用します。
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: Block レイヤー内訳の配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BlockLayerEntry"
+
+  /metrics/tool-risk-profile:
+    get:
+      summary: Tool 別リスクプロファイル
+      description: 直近24時間の Tool 別リスクプロファイルを取得します。deny_pct 降順でソートされます。
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: Tool 別リスクプロファイルの配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ToolRiskEntry"
+
+  /metrics/agent-timeline:
+    get:
+      summary: エージェント別時系列
+      description: 直近24時間のエージェント別の判定時系列エントリを取得します。Judgment UI の Map 画面で使用します。
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: エージェント別時系列の配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentTimelineEntry"
+
+  /metrics/behavior_heatmap:
+    get:
+      summary: エージェント別行動ヒートマップ
+      description: |
+        直近24時間のエージェント別・1時間バケット別の deny rate をヒートマップ形式で取得します。
+        Firestore の judgment_events コレクションから集計。Judgment UI の Governance Insights 画面で使用します。
+        登録済みの全エージェントが結果に含まれます（データなしのエージェントも含む）。
+      tags:
+        - Metrics
+      parameters:
+        - name: window
+          in: query
+          schema:
+            type: string
+            default: "24h"
+          description: 集計ウィンドウ（デフォルト 24h）
+        - name: bucket
+          in: query
+          schema:
+            type: string
+            default: "1h"
+          description: バケットサイズ（デフォルト 1h）
+      responses:
+        "200":
+          description: ヒートマップデータ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeatmapResponse"
+
+  # ============================================================
+  # Service-A: Direct Action (PEP 内蔵)
+  # ============================================================
+  /v1/actions/get_resident_info:
+    post:
+      summary: 住民情報取得（PEP 内蔵）
+      description: |
+        PEP 内蔵の直接アクション実行エンドポイント。
+        1. PDP に認可判断を問い合わせ
+        2. Allow → Tool (service-c) を直接呼び出し
+        3. Deny → 403 Forbidden
+        4. PDP 障害 → 503 Service Unavailable（Fail Closed）
+        5. Tool 障害 → 502 Bad Gateway
+      tags:
+        - Direct Action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 認可成功・実行完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResponse"
+        "403":
+          description: 認可拒否（Deny）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionErrorDetail"
+        "502":
+          description: Tool 実行失敗
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionErrorDetail"
+        "503":
+          description: PDP 障害（Fail Closed）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionErrorDetail"
+
+  /v1/agent/plan-and-act:
+    post:
+      summary: Agent Plan-and-Act
+      description: |
+        自然言語リクエストから Plan を生成し、各アクションを PDP で判定して実行します。
+        1. Vertex AI (Gemini) で Plan を生成
+        2. Plan を厳格にバリデーション（Fail Closed: 未知のアクションは除外）
+        3. 各アクションを PDP で判定し、allow なら Tool を実行
+        4. Strict Mode: 最初の Deny で即座に停止
+      tags:
+        - Direct Action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanRequest"
+      responses:
+        "200":
+          description: Plan 実行結果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanAndActResponse"
+        "502":
+          description: Tool 実行失敗
+        "503":
+          description: PDP 障害（Fail Closed）
+
+  # ============================================================
+  # Service-B: PDP (OPA)
+  # ============================================================
+  /v1/data/authorization/decision:
+    post:
+      summary: 認可判定（OPA）
+      description: |
+        OPA の標準クエリ API。action と context を入力として認可判定を返します。
+        Service-A が内部的に呼び出します。
+      tags:
+        - PDP
+      servers:
+        - url: http://localhost:8181
+          description: OPA (Service-B)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PDPInput"
+      responses:
+        "200":
+          description: 認可判定結果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PDPOutput"
+
+  # ============================================================
+  # Service-C: Tool
+  # ============================================================
+  /tool/health:
+    get:
+      summary: Tool ヘルスチェック
+      tags:
+        - Tool
+      servers:
+        - url: http://localhost:8082
+          description: Service-C (Tool)
+      responses:
+        "200":
+          description: 正常
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /tool/execute:
+    post:
+      summary: Tool 実行（レガシー）
+      description: Tool 実行エンドポイント。API キーによる認証に対応。
+      tags:
+        - Tool
+      servers:
+        - url: http://localhost:8082
+          description: Service-C (Tool)
+      security:
+        - ToolApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToolExecuteRequest"
+      responses:
+        "200":
+          description: 実行成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolExecuteResponse"
+        "401":
+          description: API キー認証失敗
 
   /tool/resident-info:
     post:
       summary: 住民情報取得 (Tool)
       description: |
-        本エンドポイントは Envoy Gateway によって保護されています。
-        呼出には `scope: execute:get_resident_info` を含んだ JWT が必要です。
+        住民情報を返す Tool エンドポイント。API キーまたは JWT (Envoy Gateway 経由) で保護されています。
+        ダミーの住民データを返します。
       tags:
         - Tool
+      servers:
+        - url: http://localhost:8082
+          description: Service-C (Tool)
       security:
+        - ToolApiKey: []
         - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                request_id:
-                  type: string
-                action:
-                  type: string
-                  example: get_resident_info
+              $ref: "#/components/schemas/ToolExecuteRequest"
       responses:
         "200":
           description: 住民データ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolResidentInfoResponse"
         "401":
-          description: 未認証
-        "403":
-          description: 認可エラー (Scope 不足)
+          description: 認証エラー
+
+  # ============================================================
+  # Agent Simulator
+  # ============================================================
+  /simulator/health:
+    get:
+      summary: Simulator ヘルスチェック
+      tags:
+        - Agent Simulator
+      servers:
+        - url: http://localhost:8090
+          description: Agent Simulator
+      responses:
+        "200":
+          description: 正常
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /simulator/trigger:
+    post:
+      summary: シミュレーション実行
+      description: |
+        1〜3件のランダムなエージェントプロファイルを選択し、
+        それぞれの行動パターンに基づいて Service-A の /authorize にリクエストを送信します。
+      tags:
+        - Agent Simulator
+      servers:
+        - url: http://localhost:8090
+          description: Agent Simulator
+      responses:
+        "200":
+          description: トリガー結果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulatorTriggerResponse"
+
+  /simulator/status:
+    get:
+      summary: Simulator ステータス
+      description: Simulator の実行統計情報を取得します。
+      tags:
+        - Agent Simulator
+      servers:
+        - url: http://localhost:8090
+          description: Agent Simulator
+      responses:
+        "200":
+          description: ステータス情報
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulatorStatus"
 
 components:
   securitySchemes:
@@ -107,8 +733,32 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    ToolApiKey:
+      type: apiKey
+      in: header
+      name: X-Tool-Api-Key
+      description: Tool API キー（未設定時はスキップ）
 
   schemas:
+    # ===========================================================
+    # Common
+    # ===========================================================
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "ok"
+
+    ErrorDetail:
+      type: object
+      properties:
+        detail:
+          type: string
+
+    # ===========================================================
+    # Core: Authorize / Execute
+    # ===========================================================
     AuthorizeRequest:
       type: object
       required:
@@ -118,25 +768,47 @@ components:
       properties:
         agent_id:
           type: string
-          example: "agent-001"
+          description: エージェント識別子
+          example: "cs-frontdesk"
+        agent_role:
+          type: string
+          default: "assistant"
+          description: エージェントのロール。BAN チェックおよび Judgment UI の表示に使用。
+          example: "cs-frontdesk"
         action:
           type: string
+          enum: [get_resident_info, read_resident_record, update_benefit_status, send_official_notice]
+          description: 実行するアクション
           example: "get_resident_info"
         context:
-          type: object
-          properties:
-            purpose:
-              type: string
-              example: "inquiry"
-            time:
-              type: string
-              example: "2024-01-01T10:00:00Z"
-            data_sensitivity:
-              type: string
-              example: "high"
+          $ref: "#/components/schemas/Context"
         request_id:
           type: string
           format: uuid
+          description: リクエストID（省略時は自動生成）
+
+    Context:
+      type: object
+      required:
+        - purpose
+        - time
+        - data_sensitivity
+      properties:
+        purpose:
+          type: string
+          enum: [inquiry, audit, approval, notification, emergency]
+          description: 業務目的
+          example: "inquiry"
+        time:
+          type: string
+          enum: [business_hours, after_hours]
+          description: 時間帯
+          example: "business_hours"
+        data_sensitivity:
+          type: string
+          enum: [required, optional]
+          description: データ機密度
+          example: "required"
 
     AuthorizeResponse:
       type: object
@@ -150,14 +822,20 @@ components:
           type: string
         execution_handle:
           type: string
-          description: 認可チケット (JWT)
+          nullable: true
+          description: |
+            認可チケット (JWT)。decision=allow の場合のみ発行。
+            JWT Claims: iss, aud, sub, jti, exp, iat, scope, req_id, ctx_hash
         expires_in_seconds:
           type: integer
+          nullable: true
+          description: JWT の有効期限（秒）。decision=allow の場合のみ設定。
           example: 60
 
     ExecuteRequest:
       type: object
       required:
+        - request_id
         - execution_handle
         - tool_request
       properties:
@@ -189,7 +867,11 @@ components:
           example: "/resident-info"
           description: |
             Tool API のパス。JWT の scope と整合性が検証されます。
-            例: scope が "execute:get_resident_info" の場合、"/resident-info" のみ許可されます。
+            scope-to-path マッピング:
+            - execute:get_resident_info → /resident-info
+            - execute:read_resident_record → /resident-record
+            - execute:update_benefit_status → /benefit-status
+            - execute:send_official_notice → /official-notice
         body:
           type: object
           description: リクエストボディ
@@ -201,8 +883,750 @@ components:
           type: string
         status:
           type: string
-          enum: [success, error, blocked]
+          enum: [success, blocked, failed]
+          description: |
+            実行結果ステータス:
+            - success: Tool 実行成功
+            - blocked: JWT 検証失敗（期限切れ、scope 不一致、JTI 使用済み等）
+            - failed: Tool 呼び出し失敗（タイムアウト、接続エラー等）
         result:
           type: object
+          nullable: true
+          description: Tool の実行結果（success の場合のみ）
         reason:
           type: string
+          nullable: true
+          description: エラー理由（blocked / failed の場合のみ）
+
+    # ===========================================================
+    # Activity / Judgment
+    # ===========================================================
+    JudgmentEvent:
+      type: object
+      description: 判定イベント。Firestore の judgment_events コレクションに保存されるデータモデル。
+      properties:
+        id:
+          type: string
+          description: 一意ID（request_id と同一）
+        ts:
+          type: string
+          format: date-time
+          description: 判定タイムスタンプ（ISO 8601）
+        agent_id:
+          type: string
+          description: エージェント識別子
+        agent_role:
+          type: string
+          description: エージェントロール
+          example: "cs-frontdesk"
+        tool:
+          type: string
+          description: ツール名（action から導出）
+          example: "resident"
+        action:
+          type: string
+          description: アクション名（action から導出）
+          example: "read"
+        decision:
+          type: string
+          enum: [ALLOW, DENY]
+          description: 判定結果
+        reason:
+          type: string
+          description: 判定理由
+        policy_id:
+          type: string
+          nullable: true
+          description: 適用されたポリシーのID
+          example: "P-001"
+        policy_tags:
+          type: array
+          items:
+            type: string
+          description: ポリシータグ
+          example: ["pii", "audit-required"]
+        context:
+          type: object
+          additionalProperties:
+            type: string
+          description: サニタイズ済みコンテキスト
+        blocked_layer:
+          type: string
+          description: ブロックしたレイヤー
+          example: "L1 Judgment"
+        execution_status:
+          type: string
+          nullable: true
+          description: Tool 実行ステータス（success / failed / null）
+        jti:
+          type: string
+          nullable: true
+          description: JWT の JTI（実行された場合のみ）
+
+    ActivityResponse:
+      type: object
+      description: ページネーション付きアクティビティログレスポンス
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/JudgmentEvent"
+          description: 判定イベントの配列
+        next_cursor:
+          type: string
+          nullable: true
+          description: 次ページのカーソル（Base64エンコード済み）。最終ページの場合は null
+        has_more:
+          type: boolean
+          description: 次ページが存在するかどうか
+
+    # ===========================================================
+    # Agent Management
+    # ===========================================================
+    Agent:
+      type: object
+      description: エージェントレコード
+      properties:
+        id:
+          type: string
+          description: エージェントID
+          example: "cs-frontdesk"
+        name:
+          type: string
+          description: エージェント名
+          example: "cs-frontdesk"
+        display_name:
+          type: string
+          description: 表示名
+          example: "窓口対応エージェント"
+        role:
+          type: string
+          description: ロール
+          example: "Frontdesk"
+        status:
+          type: string
+          enum: [active, banned]
+          description: エージェント状態
+        last_seen:
+          type: string
+          format: date-time
+          nullable: true
+          description: 最終活動日時
+        banned_reason:
+          type: string
+          nullable: true
+          description: BAN 理由
+        banned_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: BAN 日時
+        allow_24h:
+          type: integer
+          description: 直近24時間の ALLOW 件数
+          example: 35
+        deny_24h:
+          type: integer
+          description: 直近24時間の DENY 件数
+          example: 15
+
+    BanRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          description: BAN 理由
+          example: "異常な頻度のアクセスを検出"
+
+    BanResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "banned"
+        agent_id:
+          type: string
+        reason:
+          type: string
+
+    UnbanResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "active"
+        agent_id:
+          type: string
+
+    # ===========================================================
+    # Metrics
+    # ===========================================================
+    MetricsOverview:
+      type: object
+      description: 直近24時間のメトリクス概要
+      properties:
+        total_events:
+          type: integer
+          description: 総イベント数
+          example: 150
+        allow_count:
+          type: integer
+          description: ALLOW 件数
+          example: 102
+        deny_count:
+          type: integer
+          description: DENY 件数
+          example: 48
+        deny_rate:
+          type: number
+          format: float
+          description: DENY 率（パーセンテージ）
+          example: 32.0
+        active_agents:
+          type: integer
+          description: アクティブなエージェント数
+          example: 4
+        period:
+          type: string
+          description: 集計期間
+          example: "last_24h"
+
+    AgentMetrics:
+      type: object
+      description: エージェント別メトリクス
+      properties:
+        agent_id:
+          type: string
+          description: エージェント識別子
+          example: "cs-frontdesk"
+        total:
+          type: integer
+          description: 総イベント数
+          example: 50
+        allow_count:
+          type: integer
+          example: 35
+        deny_count:
+          type: integer
+          example: 15
+        deny_rate:
+          type: number
+          format: float
+          example: 30.0
+
+    ReasonMetrics:
+      type: object
+      description: 理由別メトリクス
+      properties:
+        reason:
+          type: string
+          description: DENY 理由テキスト
+          example: "業務時間外のアクセスは許可されていません"
+        count:
+          type: integer
+          description: 該当する DENY 件数
+          example: 12
+        pct:
+          type: number
+          format: float
+          description: 全DENY中の割合（パーセンテージ）
+          example: 25.0
+
+    DecisionDistribution:
+      type: object
+      description: 判定分布（パーセンテージ）
+      properties:
+        allow_pct:
+          type: integer
+          description: ALLOW のパーセンテージ
+          example: 68
+        deny_pct:
+          type: integer
+          description: DENY のパーセンテージ
+          example: 32
+        total_count:
+          type: integer
+          description: 総件数
+          example: 100
+
+    AgentDenyRate:
+      type: object
+      description: エージェント別 Deny 率
+      properties:
+        agent:
+          type: string
+          description: エージェントID
+          example: "cs-night"
+        deny_pct:
+          type: integer
+          description: Deny 率（パーセンテージ）
+          example: 35
+
+    BlockReasonEntry:
+      type: object
+      description: Deny 理由内訳エントリ
+      properties:
+        reason:
+          type: string
+          description: DENY 理由テキスト（最大80文字）
+          example: "Denied: access allowed only during business hours"
+        count:
+          type: integer
+          description: 該当件数
+          example: 8
+        pct:
+          type: integer
+          description: 全DENY中の割合（パーセンテージ）
+          example: 25
+
+    BlockLayerEntry:
+      type: object
+      description: Block レイヤー内訳エントリ
+      properties:
+        layer:
+          type: string
+          description: ブロックレイヤー名
+          example: "L1 Judgment"
+        count:
+          type: integer
+          description: 該当件数
+          example: 45
+        pct:
+          type: integer
+          description: 全イベント中の割合（パーセンテージ）
+          example: 100
+
+    ToolRiskEntry:
+      type: object
+      description: Tool 別リスクプロファイルエントリ
+      properties:
+        tool:
+          type: string
+          description: ツール名
+          example: "benefit"
+        total:
+          type: integer
+          description: 総件数
+          example: 30
+        deny_count:
+          type: integer
+          description: DENY 件数
+          example: 12
+        deny_pct:
+          type: integer
+          description: Deny 率（パーセンテージ）
+          example: 40
+
+    AgentTimelineEntry:
+      type: object
+      description: エージェント別時系列エントリ
+      properties:
+        agent:
+          type: string
+          description: エージェントID
+          example: "cs-night"
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              ts:
+                type: string
+                format: date-time
+                description: タイムスタンプ
+              decision:
+                type: string
+                description: 判定結果
+              is_ban:
+                type: boolean
+                description: BAN イベントかどうか
+
+    HeatmapCell:
+      type: object
+      nullable: true
+      description: 1時間バケットのヒートマップセルデータ。データなしの場合は null。
+      properties:
+        allow:
+          type: integer
+          description: ALLOW 件数
+          example: 5
+        deny:
+          type: integer
+          description: DENY 件数
+          example: 3
+        deny_rate:
+          type: number
+          format: float
+          description: Deny率（パーセンテージ）
+          example: 37.5
+        total:
+          type: integer
+          description: 総件数
+          example: 8
+
+    HeatmapAgent:
+      type: object
+      description: エージェント別ヒートマップデータ
+      properties:
+        agent_id:
+          type: string
+          description: エージェント識別子
+          example: "cs-night"
+        display_name:
+          type: string
+          description: エージェント表示名
+          example: "夜間対応エージェント"
+        role:
+          type: string
+          description: エージェントロール
+          example: "Frontdesk"
+        status:
+          type: string
+          enum: [active, banned]
+          description: エージェント状態
+        summary_deny_rate:
+          type: number
+          format: float
+          description: 24時間全体の Deny率
+          example: 85.7
+        summary_total:
+          type: integer
+          description: 24時間の総件数
+          example: 42
+        summary_deny:
+          type: integer
+          description: 24時間の DENY 件数
+          example: 36
+        last_5m_deny:
+          type: integer
+          description: 直近5分の DENY 件数
+          example: 2
+        cells:
+          type: array
+          items:
+            $ref: "#/components/schemas/HeatmapCell"
+          description: 24個のバケットセル配列（null はデータなし）
+
+    HeatmapResponse:
+      type: object
+      description: エージェント別行動ヒートマップレスポンス
+      properties:
+        window:
+          type: string
+          description: 集計ウィンドウ
+          example: "24h"
+        bucket_size:
+          type: string
+          description: バケットサイズ
+          example: "1h"
+        bucket_starts:
+          type: array
+          items:
+            type: string
+            format: date-time
+          description: 各バケットの開始時刻（ISO 8601）
+        agents:
+          type: array
+          items:
+            $ref: "#/components/schemas/HeatmapAgent"
+          description: エージェント別ヒートマップデータ（summary_deny_rate 降順）
+
+    # ===========================================================
+    # Direct Action
+    # ===========================================================
+    ActionRequest:
+      type: object
+      required:
+        - context
+      properties:
+        context:
+          $ref: "#/components/schemas/Context"
+
+    ActionResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          example: "get_resident_info"
+        allowed:
+          type: boolean
+          example: true
+        reason:
+          type: string
+        outcome:
+          type: string
+          example: "success"
+        data:
+          type: object
+          description: Tool 実行結果データ
+
+    ActionErrorDetail:
+      type: object
+      description: アクション実行エラー詳細（HTTPException の detail）
+      properties:
+        request_id:
+          type: string
+        action:
+          type: string
+        allowed:
+          type: boolean
+        reason:
+          type: string
+        outcome:
+          type: string
+        error_type:
+          type: string
+          nullable: true
+
+    PlanRequest:
+      type: object
+      required:
+        - request
+      properties:
+        request:
+          type: string
+          description: ユーザーの自然言語リクエスト
+          example: "住民の山田さんの情報を確認してください"
+
+    PlanAndActResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        plan:
+          type: object
+          properties:
+            actions_count:
+              type: integer
+              description: バリデーション通過したアクション数
+        per_action_results:
+          type: array
+          items:
+            type: object
+            properties:
+              action:
+                type: string
+              decision:
+                type: object
+                properties:
+                  allow:
+                    type: boolean
+                  reason:
+                    type: string
+              tool_result:
+                type: object
+                nullable: true
+                description: Tool 実行結果（Deny の場合は null）
+                properties:
+                  status_code:
+                    type: integer
+                  latency_ms:
+                    type: number
+                  outcome:
+                    type: string
+                  error_type:
+                    type: string
+                    nullable: true
+        final_status:
+          type: string
+          enum: [completed, blocked]
+          description: |
+            最終ステータス:
+            - completed: 全アクション実行完了
+            - blocked: Deny により停止
+        error:
+          type: object
+          nullable: true
+          description: Plan 生成エラー（Vertex AI 障害時のみ）
+          properties:
+            type:
+              type: string
+            message:
+              type: string
+
+    # ===========================================================
+    # PDP (OPA)
+    # ===========================================================
+    PDPInput:
+      type: object
+      description: OPA 入力データ
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          required:
+            - action
+            - context
+          properties:
+            action:
+              type: string
+              enum: [get_resident_info, read_resident_record, update_benefit_status, send_official_notice]
+              description: 実行するアクション
+            context:
+              type: object
+              properties:
+                purpose:
+                  type: string
+                  enum: [inquiry, audit, approval, notification, emergency]
+                time:
+                  type: string
+                  enum: [business_hours, after_hours]
+                data_sensitivity:
+                  type: string
+                  enum: [required, optional]
+
+    PDPOutput:
+      type: object
+      description: OPA 判定結果
+      properties:
+        result:
+          type: object
+          properties:
+            allow:
+              type: boolean
+              description: 認可判定
+            reason:
+              type: string
+              description: 判定理由
+            policy_id:
+              type: string
+              description: 適用されたポリシーID
+              example: "P-001"
+            tags:
+              type: array
+              items:
+                type: string
+              description: ポリシータグ
+              example: ["pii", "audit-required"]
+
+    # ===========================================================
+    # JWKS
+    # ===========================================================
+    JWKSResponse:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            properties:
+              kty:
+                type: string
+                example: "RSA"
+              alg:
+                type: string
+                example: "RS256"
+              use:
+                type: string
+                example: "sig"
+              kid:
+                type: string
+                example: "judgment-key-1"
+              n:
+                type: string
+                description: RSA 公開鍵の modulus (Base64url)
+              e:
+                type: string
+                description: RSA 公開鍵の exponent (Base64url)
+
+    # ===========================================================
+    # Tool (Service-C)
+    # ===========================================================
+    ToolExecuteRequest:
+      type: object
+      required:
+        - request_id
+        - action
+        - context
+      properties:
+        request_id:
+          type: string
+        action:
+          type: string
+        context:
+          type: object
+
+    ToolExecuteResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "done"
+        request_id:
+          type: string
+
+    ToolResidentInfoResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "done"
+        request_id:
+          type: string
+        data:
+          type: object
+          properties:
+            resident_id:
+              type: string
+              example: "R-0001"
+            name:
+              type: string
+              example: "Taro Yamada"
+            address:
+              type: string
+              example: "Tokyo"
+            note:
+              type: string
+              example: "dummy"
+
+    # ===========================================================
+    # Agent Simulator
+    # ===========================================================
+    SimulatorTriggerResponse:
+      type: object
+      properties:
+        triggered_count:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: トリガーされたリクエスト数
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              agent_id:
+                type: string
+                example: "cs-frontdesk"
+              action:
+                type: string
+                example: "get_resident_info"
+              decision:
+                type: string
+                enum: [allow, deny, error]
+              reason:
+                type: string
+              latency_ms:
+                type: integer
+
+    SimulatorStatus:
+      type: object
+      properties:
+        last_trigger:
+          type: string
+          format: date-time
+          nullable: true
+          description: 最後のトリガー日時
+        total_requests:
+          type: integer
+          description: 累計リクエスト数
+        errors_last_24h:
+          type: integer
+          description: 直近24時間のエラー数
